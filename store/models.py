@@ -3,15 +3,75 @@ import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.text import slugify
+
+
+def delete_stored_file(name: str) -> None:
+    """Remove a file from the active storage backend, ignoring failures.
+
+    Losing an orphaned file is never worth breaking a product save over, so
+    every error here is swallowed deliberately.
+    """
+    if not name:
+        return
+    try:
+        default_storage.delete(name)
+    except Exception:  # pragma: no cover - defensive cleanup only
+        pass
 
 
 def generate_order_number() -> str:
     """Generate a short, human-friendly order identifier."""
     return uuid.uuid4().hex[:12].upper()
+
+
+class MediaFile(models.Model):
+    """The bytes of an uploaded file, kept in the database.
+
+    Hosting platforms give a web service an ephemeral container filesystem, so
+    an image written to ``MEDIA_ROOT`` disappears on the next deploy or restart
+    while the product row keeps pointing at it. Storing the payload here means
+    uploads survive exactly as long as the rest of the data.
+
+    Rows are written and read through ``store.storage.DatabaseStorage`` rather
+    than directly.
+    """
+
+    name = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="Storage key, e.g. products/2026/09/lamp.webp",
+    )
+    content = models.BinaryField(help_text="Raw file bytes.")
+    content_type = models.CharField(max_length=120, blank=True, default="")
+    size = models.PositiveIntegerField(default=0, help_text="Size in bytes.")
+    checksum = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="SHA-256 of the content; also used as the HTTP ETag.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Media file"
+        verbose_name_plural = "Media files"
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def data(self) -> bytes:
+        """Content as ``bytes`` (PostgreSQL hands back a ``memoryview``)."""
+        return bytes(self.content) if self.content is not None else b""
 
 
 class Category(models.Model):
@@ -104,7 +164,24 @@ class Product(models.Model):
                 candidate = f"{base_slug}-{counter}"
                 counter += 1
             self.slug = candidate
-        return super().save(*args, **kwargs)
+
+        # Remember the stored file this product used before the save so a
+        # replaced image does not linger in storage forever.
+        previous_image = ""
+        if self.pk:
+            previous_image = (
+                Product.objects.filter(pk=self.pk)
+                .values_list("image", flat=True)
+                .first()
+                or ""
+            )
+
+        result = super().save(*args, **kwargs)
+
+        current_image = self.image.name or ""
+        if previous_image and previous_image != current_image:
+            delete_stored_file(previous_image)
+        return result
 
     @property
     def stock(self):
@@ -128,6 +205,12 @@ class Product(models.Model):
 
     def get_absolute_url(self):
         return reverse("store:product_detail", args=[self.slug])
+
+
+@receiver(post_delete, sender=Product)
+def delete_product_image(sender, instance, **kwargs):
+    """Drop the stored image when its product is deleted."""
+    delete_stored_file(instance.image.name if instance.image else "")
 
 
 class Cart(models.Model):

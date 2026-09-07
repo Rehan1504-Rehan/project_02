@@ -1,15 +1,19 @@
+import base64
 import os
+import tempfile
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import CartItem, Category, Order, OrderItem, Product
+from .admin import ProductAdminForm
+from .models import CartItem, Category, MediaFile, Order, OrderItem, Product
 
 
 User = get_user_model()
@@ -140,6 +144,145 @@ class StoreFlowTests(TestCase):
         finally:
             if media_file.exists():
                 media_file.unlink()
+
+
+# A tiny but genuine 1x1 PNG, so ImageField validation is exercised for real.
+ONE_PIXEL_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmM"
+    "IQAAAABJRU5ErkJggg=="
+)
+
+
+class MediaPersistenceTests(TestCase):
+    """Uploads must outlive the container filesystem.
+
+    Hosts such as Render wipe the filesystem on every deploy, which used to
+    leave products pointing at a /media/ URL that answered 404.
+    """
+
+    def setUp(self):
+        self.product = Product.objects.create(
+            name="Desk Lamp",
+            description="A warm desk lamp.",
+            price=Decimal("40.00"),
+            stock_quantity=3,
+        )
+
+    def upload(self, filename="lamp.png", payload=ONE_PIXEL_PNG):
+        self.product.image = SimpleUploadedFile(filename, payload, content_type="image/png")
+        self.product.save()
+        self.product.refresh_from_db()
+        return self.product.image.name
+
+    def test_upload_is_stored_in_the_database_not_on_disk(self):
+        name = self.upload()
+        self.assertTrue(MediaFile.objects.filter(name=name).exists())
+        self.assertEqual(MediaFile.objects.get(name=name).data, ONE_PIXEL_PNG)
+        self.assertFalse((Path(settings.MEDIA_ROOT) / name).exists())
+
+    def test_image_url_serves_the_uploaded_bytes(self):
+        self.upload()
+        url = self.product.image.url
+        self.assertTrue(url.startswith("/media/products/"))
+        with override_settings(DEBUG=False, SERVE_MEDIA=True):
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, ONE_PIXEL_PNG)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertIn("max-age", response["Cache-Control"])
+
+    def test_image_survives_a_wiped_container_filesystem(self):
+        """Simulate a redeploy: the disk is empty, the database is not."""
+        self.upload()
+        url = self.product.image.url
+        with override_settings(DEBUG=False, MEDIA_ROOT=Path(tempfile.mkdtemp())):
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.content, ONE_PIXEL_PNG)
+
+    def test_storefront_renders_the_working_image_url(self):
+        self.upload()
+        response = self.client.get(self.product.get_absolute_url())
+        self.assertContains(response, self.product.image.url)
+        image_response = self.client.get(self.product.image.url)
+        self.assertEqual(image_response.status_code, 200)
+
+    def test_repeat_upload_of_same_filename_keeps_both_products_working(self):
+        first = self.upload()
+        other = Product.objects.create(
+            name="Floor Lamp",
+            description="A tall lamp.",
+            price=Decimal("60.00"),
+            stock_quantity=2,
+            image=SimpleUploadedFile("lamp.png", b"", content_type="image/png"),
+        )
+        other.image = SimpleUploadedFile("lamp.png", ONE_PIXEL_PNG, content_type="image/png")
+        other.save()
+        other.refresh_from_db()
+        self.assertNotEqual(first, other.image.name)
+        self.assertEqual(self.client.get(other.image.url).status_code, 200)
+
+    def test_replacing_an_image_removes_the_previous_file(self):
+        original = self.upload()
+        replacement = self.upload(filename="lamp-v2.png")
+        self.assertNotEqual(original, replacement)
+        self.assertFalse(MediaFile.objects.filter(name=original).exists())
+        self.assertTrue(MediaFile.objects.filter(name=replacement).exists())
+
+    def test_deleting_a_product_removes_its_file(self):
+        name = self.upload()
+        self.product.delete()
+        self.assertFalse(MediaFile.objects.filter(name=name).exists())
+
+    def test_unknown_media_path_returns_404(self):
+        with override_settings(DEBUG=False):
+            self.assertEqual(self.client.get("/media/products/nope.png").status_code, 404)
+
+    def test_media_path_traversal_is_rejected(self):
+        with override_settings(DEBUG=False):
+            response = self.client.get("/media/../ecommerce/settings.py")
+        self.assertIn(response.status_code, {404, 400})
+
+    def test_conditional_request_returns_304(self):
+        self.upload()
+        url = self.product.image.url
+        first = self.client.get(url)
+        second = self.client.get(url, headers={"if-none-match": first["ETag"]})
+        self.assertEqual(second.status_code, 304)
+
+    def test_import_command_moves_disk_files_into_the_database(self):
+        media_root = Path(tempfile.mkdtemp())
+        legacy = media_root / "products" / "2026" / "09" / "legacy.png"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_bytes(ONE_PIXEL_PNG)
+        with override_settings(MEDIA_ROOT=media_root):
+            call_command("import_media_to_db", verbosity=0)
+        record = MediaFile.objects.get(name="products/2026/09/legacy.png")
+        self.assertEqual(record.data, ONE_PIXEL_PNG)
+        self.assertEqual(record.content_type, "image/png")
+
+    def test_check_media_clears_references_to_lost_files(self):
+        Product.objects.filter(pk=self.product.pk).update(image="products/2026/09/gone.png")
+        call_command("check_media", "--clear-missing", verbosity=0)
+        self.product.refresh_from_db()
+        self.assertFalse(self.product.image)
+
+    def test_oversized_upload_is_rejected_by_the_admin_form(self):
+        big = SimpleUploadedFile("big.png", ONE_PIXEL_PNG, content_type="image/png")
+        big.size = settings.MAX_IMAGE_UPLOAD_BYTES + 1
+        form = ProductAdminForm(
+            data={
+                "name": "Huge",
+                "slug": "huge",
+                "description": "Too big",
+                "price": "10.00",
+                "stock_quantity": "1",
+                "available": "on",
+            },
+            files={"image": big},
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("image", form.errors)
 
 
 class AdminSetupCommandTests(TestCase):

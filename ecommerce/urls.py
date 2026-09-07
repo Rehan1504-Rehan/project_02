@@ -1,9 +1,9 @@
 """URL configuration for the ecommerce project."""
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path
-from django.views.static import serve
+
+from store import views as store_views
 
 
 urlpatterns = [
@@ -11,17 +11,13 @@ urlpatterns = [
     path("", include("store.urls")),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-elif settings.SERVE_MEDIA:
-    # This is useful for a small Railway deployment with a persistent Volume.
-    # Larger deployments should use object storage for media instead.
+if settings.SERVE_MEDIA:
+    # Uploads are served by the same view in development and in production so
+    # that a working local image cannot turn into a 404 after deployment. The
+    # view reads from the database (MEDIA_STORAGE=database) and falls back to
+    # MEDIA_ROOT for files written before that, or by a mounted disk.
     urlpatterns += [
-        re_path(
-            r"^media/(?P<path>.*)$",
-            serve,
-            {"document_root": settings.MEDIA_ROOT},
-        )
+        re_path(r"^media/(?P<path>.*)$", store_views.serve_media, name="media"),
     ]
 
 handler403 = "store.views.permission_denied"

@@ -15,6 +15,7 @@ It is intentionally a simple order system: customers can place an order with shi
 - Quantity validation so customers cannot add or order more than available stock.
 - Transaction-safe checkout with locked inventory rows.
 - Orders and order items stored permanently in the database.
+- Product images stored in the database, so uploads survive redeploys on hosts with an ephemeral filesystem.
 - Order items save the product name and price at purchase time. Later product price changes do not change old orders.
 - Customer order history and order detail pages.
 - Customized Django Admin for products, images, categories, users, carts, orders, and order status.
@@ -30,6 +31,7 @@ project_02/
 ├── manage.py
 ├── requirements.txt
 ├── Procfile
+├── build.sh
 ├── runtime.txt
 ├── railway.json
 ├── .gitignore
@@ -48,17 +50,21 @@ project_02/
 │   ├── context_processors.py
 │   ├── forms.py
 │   ├── models.py
+│   ├── storage.py
 │   ├── urls.py
 │   ├── views.py
 │   ├── migrations/
 │   │   ├── __init__.py
 │   │   ├── 0001_initial.py
-│   │   └── 0002_alter_orderitem_product_name.py
+│   │   ├── 0002_alter_orderitem_product_name.py
+│   │   └── 0003_mediafile.py
 │   └── management/
 │       ├── __init__.py
 │       └── commands/
 │           ├── __init__.py
-│           └── create_admin.py
+│           ├── check_media.py
+│           ├── create_admin.py
+│           └── import_media_to_db.py
 ├── templates/
 │   ├── 403.html
 │   ├── 404.html
@@ -80,7 +86,7 @@ project_02/
 │       ├── css/site.css
 │       └── js/site.js
 └── media/
-    └── (created automatically; ignored by Git)
+    └── (legacy on-disk uploads; new uploads go to the database)
 ```
 
 ## Requirements
@@ -226,8 +232,11 @@ In Admin, open **Products** to change prices, discount prices, descriptions, cat
 | `ADMIN_PASSWORD` | empty in Git | Private Railway variable; use a strong password. |
 | `ADMIN_EMAIL` | `admin@example.com` | Private Railway variable. |
 | `SECURE_SSL_REDIRECT` | `False` locally | Set `True` only when HTTPS proxy configuration is ready. |
-| `MEDIA_ROOT` | default `media/` | Optional persistent mount such as `/data/media` (Render Persistent Disk) or `/app/media` (Railway Volume). |
-| `SERVE_MEDIA` | `True` | Media is served automatically by Django. Set `False` when using external cloud object storage. |
+| `MEDIA_STORAGE` | `database` | `database` (default) keeps uploads in the database so they survive redeploys. Use `filesystem` only with a real persistent disk. |
+| `MEDIA_ROOT` | default `media/` | Only used when `MEDIA_STORAGE=filesystem`; point it at a mount such as `/data/media` (Render Persistent Disk) or `/app/media` (Railway Volume). |
+| `SERVE_MEDIA` | `True` | Django serves `/media/` itself. Set `False` only when a CDN or object store answers that path. |
+| `MEDIA_CACHE_SECONDS` | `3600` | Browser cache lifetime for uploaded images. ETags still allow instant revalidation. |
+| `MAX_IMAGE_UPLOAD_MB` | `5` | Largest product image an admin may upload. Uploads are held in memory, so keep this modest. |
 
 Django will use SQLite when `DATABASE_URL` is empty. When `DATABASE_URL` is set, `dj-database-url` configures the database, including Railway's PostgreSQL URL.
 
@@ -302,12 +311,50 @@ In the Railway web service, open **Settings** → **Networking** → **Generate 
 
 - WhiteNoise serves files collected into `staticfiles/`; the Procfile starts Gunicorn with the correct WSGI module.
 - `python manage.py collectstatic --noinput` is safe to run during deployment.
-- Product uploads go to `MEDIA_ROOT` and are served by Django at `/media/` in development and production (`SERVE_MEDIA` defaults to `True`).
-- Cloud host container filesystems (e.g. Render, Railway) are ephemeral and not a permanent media store across redeploys.
-  - **Render**: Attach a Persistent Disk mounted at `/data/media` and add `MEDIA_ROOT=/data/media` to the service environment variables.
-  - **Railway**: Attach a Volume mounted at `/app/media` and add `MEDIA_ROOT=/app/media` to the service environment variables.
-  - The application automatically serves the mounted disk/volume at `/media/`.
-- For a multi-instance or higher-traffic shop, use an S3-compatible object store (Amazon S3, Cloudflare R2, or similar) and add a dedicated Django storage backend such as `django-storages`. Configure that backend and its bucket credentials as private service variables; never place cloud keys in this repository. Static files can continue to use WhiteNoise.
+- **Product uploads are stored in the database**, not on disk. Cloud container filesystems (Render, Railway, Fly.io, Heroku) are ephemeral: a file written to `MEDIA_ROOT` is deleted on the next deploy or restart, while the product row keeps pointing at it, which is why images used to turn into broken `404`s. Keeping the bytes in the database makes an image last exactly as long as its product, with no persistent disk or object-storage account required.
+- Django serves the files back at `/media/<path>` with correct content types, `ETag` revalidation and a `Cache-Control` lifetime of `MEDIA_CACHE_SECONDS`.
+- Because uploads are read into memory and stored in a row, `MAX_IMAGE_UPLOAD_MB` (default 5 MB) caps their size. Web-friendly images of 200-500 KB are ideal.
+- Replaced and deleted product images are removed from storage automatically, so the table does not grow without bound.
+- Prefer a mounted disk instead? Set `MEDIA_STORAGE=filesystem` plus `MEDIA_ROOT`, attach a Render Persistent Disk at `/data/media` or a Railway Volume at `/app/media`, and run `python manage.py import_media_to_db` beforehand if files already live in the database.
+- For a multi-instance or higher-traffic shop, use an S3-compatible object store (Amazon S3, Cloudflare R2, or similar) and add a dedicated Django storage backend such as `django-storages`. Point `STORAGES["default"]` at that backend and set `SERVE_MEDIA=False`; keep its bucket credentials as private service variables and never place cloud keys in this repository. Static files can continue to use WhiteNoise.
+
+### Media storage commands
+
+| Command | Purpose |
+| --- | --- |
+| `python manage.py check_media` | Lists products whose image file is missing from storage, plus stored files no product references. |
+| `python manage.py check_media --clear-missing` | Blanks broken image references so the storefront shows its neutral placeholder instead of a broken image. |
+| `python manage.py check_media --prune-orphans` | Deletes stored files that no product uses. |
+| `python manage.py import_media_to_db` | Copies files from `MEDIA_ROOT` into the database; run once when moving off a disk. |
+
+## Render deployment
+
+Render builds from the repository and runs the app as a web service.
+
+| Setting | Value |
+| --- | --- |
+| Build command | `./build.sh` (installs dependencies, collects static files, **runs migrations**) |
+| Start command | `gunicorn ecommerce.wsgi --log-file -` |
+
+Required environment variables on the web service:
+
+```
+SECRET_KEY=<a long random value>
+DEBUG=False
+ALLOWED_HOSTS=your-app.onrender.com
+CSRF_TRUSTED_ORIGINS=https://your-app.onrender.com
+DATABASE_URL=<the Internal Database URL of a Render PostgreSQL instance>
+```
+
+`DATABASE_URL` is not optional in production. Render's container filesystem is
+wiped on every deploy and whenever a free instance wakes from sleep, so a SQLite
+file stored there loses all products, orders and images. Attach a managed
+PostgreSQL database and the data - including the product images, which are
+stored in the database - persists.
+
+Make sure the build command runs `migrate`. Uploaded images live in the
+`store_mediafile` table, so a deploy that skips migrations leaves the admin
+unable to save an image.
 
 ## Database and price behavior
 
@@ -364,7 +411,23 @@ Confirm PostgreSQL is linked to the web service and that `DATABASE_URL` appears 
 
 ### Images disappear after a redeploy
 
-That is expected for ephemeral container storage. On Render, attach a Persistent Disk at `/data/media` and set `MEDIA_ROOT=/data/media`. On Railway, attach a Volume at `/app/media` and set `MEDIA_ROOT=/app/media`. Alternatively, configure S3-compatible object storage as described above.
+This is fixed: product images are stored in the database (`MEDIA_STORAGE=database`, the default), so they now survive deploys, restarts and free-tier sleep cycles. Two things must be true on the host:
+
+1. The deploy runs `python manage.py migrate --noinput`, which creates the `store_mediafile` table. `build.sh` already does this.
+2. `DATABASE_URL` points at a managed PostgreSQL database. With the default SQLite file, the database itself sits on the ephemeral disk, so products *and* images would still be lost.
+
+Images uploaded **before** this change were written to the old ephemeral disk and are gone for good. Find and clear those dangling references, then re-upload the pictures:
+
+```bash
+python manage.py check_media                  # list products whose file is missing
+python manage.py check_media --clear-missing  # blank them so the placeholder shows
+```
+
+If you are migrating from a working persistent disk, copy those files into the database first:
+
+```bash
+python manage.py import_media_to_db
+```
 
 ### Static assets are missing
 
