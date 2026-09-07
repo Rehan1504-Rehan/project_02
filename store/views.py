@@ -2,8 +2,9 @@ from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import PasswordChangeForm
 from django.core.exceptions import SuspiciousFileOperation
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -16,7 +17,7 @@ from django.views.static import serve as static_serve
 from django.utils.cache import get_conditional_response
 from django.utils.http import http_date, url_has_allowed_host_and_scheme
 
-from .forms import CheckoutForm, LoginForm, RegistrationForm
+from .forms import CheckoutForm, LoginForm, ProfileForm, RegistrationForm
 from .models import Cart, CartItem, Category, MediaFile, Order, OrderItem, Product
 from .storage import normalize_name
 
@@ -276,6 +277,45 @@ def logout_view(request: HttpRequest) -> HttpResponse:
     logout(request)
     messages.info(request, "You have been signed out safely.")
     return redirect("store:home")
+
+
+@login_required
+def profile(request: HttpRequest) -> HttpResponse:
+    """The signed-in shopper's own account details.
+
+    Everything shown comes from ``request.user`` — the authenticated Django
+    user loaded fresh from the database — so no name is ever hard-coded.
+    """
+    return render(request, "store/profile.html")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def profile_edit(request: HttpRequest) -> HttpResponse:
+    """Let the signed-in shopper update their own account details."""
+    form = ProfileForm(request.POST or None, instance=request.user)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Your profile was updated successfully.")
+        return redirect("store:profile")
+    return render(request, "store/profile_edit.html", {"form": form})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def change_password(request: HttpRequest) -> HttpResponse:
+    """Let the signed-in shopper change their own password.
+
+    Uses Django's ``PasswordChangeForm`` and re-authenticates the session
+    afterwards so the user stays signed in with the new password.
+    """
+    form = PasswordChangeForm(user=request.user, data=request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        update_session_auth_hash(request, form.user)
+        messages.success(request, "Your password was changed successfully.")
+        return redirect("store:profile")
+    return render(request, "store/change_password.html", {"form": form})
 
 
 @login_required

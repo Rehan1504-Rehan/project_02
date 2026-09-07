@@ -1646,6 +1646,60 @@ html.nav-lock, body.nav-lock {
 .info-list b { color: var(--ink-2); }
 .info-cta { margin-top: 1.6rem; }
 
+/* ---------- Profile ---------- */
+
+.profile-card {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+}
+
+.profile-avatar {
+    align-items: center;
+    background: var(--accent-grad);
+    border-radius: 50%;
+    box-shadow: 0 14px 30px rgba(79, 70, 229, .32);
+    color: #fff;
+    display: inline-flex;
+    font-family: var(--font-display);
+    font-size: 2.5rem;
+    font-weight: 700;
+    height: 100px;
+    justify-content: center;
+    letter-spacing: -.02em;
+    margin-bottom: 1.1rem;
+    width: 100px;
+}
+
+.profile-name { font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em; margin: 0; overflow-wrap: anywhere; }
+.profile-username { color: var(--accent-strong); font-size: .9rem; font-weight: 600; margin: .2rem 0 0; }
+.profile-email { color: var(--muted); font-size: .88rem; margin: .4rem 0 0; overflow-wrap: anywhere; }
+
+.profile-actions { display: flex; flex-direction: column; gap: .6rem; margin-top: 1.5rem; width: 100%; }
+.profile-actions .btn { font-size: .9rem; justify-content: center; }
+.profile-actions form { margin: 0; }
+
+.profile-meta { display: flex; flex-direction: column; margin: 0; }
+.profile-meta-row {
+    align-items: center;
+    border-bottom: 1px dashed var(--line);
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: .85rem .15rem;
+}
+.profile-meta-row:last-child { border-bottom: 0; }
+.profile-meta-row dt { color: var(--muted); font-size: .82rem; font-weight: 600; margin: 0; }
+.profile-meta-row dd { color: var(--ink-2); font-size: .92rem; font-weight: 600; margin: 0; overflow-wrap: anywhere; text-align: right; }
+
+.profile-quicklinks { border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 1rem 1.6rem; margin-top: 1.2rem; padding-top: 1.2rem; }
+.profile-quicklinks a { color: var(--accent-strong); font-size: .88rem; font-weight: 600; }
+.profile-quicklinks a:hover { color: var(--ink); }
+.profile-quicklinks i { color: var(--accent); }
+
+.profile-edit-panel { max-width: 620px; }
+
 /* ---------- Responsive ---------- */
 
 @media (min-width: 992px) {
@@ -1709,6 +1763,11 @@ html.nav-lock, body.nav-lock {
 
     .cart-item { gap: .8rem; padding: .9rem; }
     .cart-item-image { height: 82px; width: 82px; }
+
+    .profile-avatar { font-size: 2.1rem; height: 84px; width: 84px; }
+    .profile-meta-row { align-items: flex-start; flex-direction: column; gap: .1rem; }
+    .profile-meta-row dd { text-align: left; }
+    .profile-quicklinks { flex-direction: column; gap: .5rem; }
 
     .footer-bottom { justify-content: center; text-align: center; }
 }
