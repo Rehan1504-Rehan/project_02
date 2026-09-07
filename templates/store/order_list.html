@@ -1,53 +1,46 @@
 {% extends 'store/base.html' %}
+{% load store_extras %}
 {% block title %}My orders — Northstar Store{% endblock %}
 {% block content %}
-<section class="page-header">
-    <div class="container py-4 py-lg-5">
-        <span class="eyebrow"><span class="eyebrow-line"></span>Your Northstar</span>
-        <h1 class="page-title mt-2">My <em>orders</em></h1>
-        <p class="lead mb-0">A record of the good things on their way to you.</p>
+<section class="page-hero">
+    <div class="container" data-reveal>
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb small mb-0">
+                <li class="breadcrumb-item"><a href="{% url 'store:home' %}">Home</a></li>
+                <li class="breadcrumb-item active" aria-current="page">My orders</li>
+            </ol>
+        </nav>
+        <h1 class="page-hero-title">My Orders</h1>
+        <p class="page-hero-sub">Everything you have ordered, all in one place.</p>
     </div>
 </section>
-<section class="container section-block pt-4 pt-lg-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-11 col-xl-10">
-            {% if orders %}
-                <div class="orders-table-wrap">
-                    <table class="table orders-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>Order</th>
-                                <th>Date</th>
-                                <th>Items</th>
-                                <th>Total</th>
-                                <th>Status</th>
-                                <th class="text-end">Details</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for order in orders %}
-                                <tr>
-                                    <td><span class="order-number">#{{ order.order_number }}</span></td>
-                                    <td class="text-muted">{{ order.created_at|date:'M j, Y' }}</td>
-                                    <td>{{ order.items.all|length }}</td>
-                                    <td><strong>${{ order.total_amount|floatformat:2 }}</strong></td>
-                                    <td><span class="status-pill status-{{ order.status }}">{{ order.get_status_display }}</span></td>
-                                    <td class="text-end"><a class="btn btn-sm btn-outline-dark rounded-pill px-3" href="{{ order.get_absolute_url }}">View order <i class="bi bi-arrow-right ms-1"></i></a></td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <a href="{% url 'store:product_list' %}" class="text-link d-inline-flex align-items-center gap-2 mt-4"><i class="bi bi-bag me-1"></i>Shop for something new</a>
-            {% else %}
-                <div class="empty-state large-empty">
-                    <i class="bi bi-box-seam"></i>
-                    <h2>No orders yet</h2>
-                    <p>Your first order is waiting to happen.</p>
-                    <a class="btn btn-brand rounded-pill px-4" href="{% url 'store:product_list' %}">Explore products <i class="bi bi-arrow-right ms-2"></i></a>
-                </div>
-            {% endif %}
+
+<section class="container section-block pt-4">
+    {% if orders %}
+        <div class="orders-list" data-reveal>
+            {% for order in orders %}
+                <a class="order-card" href="{{ order.get_absolute_url }}">
+                    <div class="order-card-top">
+                        <span class="order-number"><i class="bi bi-receipt me-2"></i>#{{ order.order_number }}</span>
+                        <span class="status-pill status-{{ order.status }}">{{ order.get_status_display }}</span>
+                    </div>
+                    <div class="order-card-meta">
+                        <span><i class="bi bi-calendar3 me-1"></i>{{ order.created_at|date:'M j, Y' }}</span>
+                        <span><i class="bi bi-box-seam me-1"></i>{{ order.items.all|length }} item{{ order.items.all|length|pluralize }}</span>
+                        <span class="order-total">{{ order.total_amount|inr }}</span>
+                    </div>
+                    <span class="order-card-cta">View details<i class="bi bi-arrow-right ms-1"></i></span>
+                </a>
+            {% endfor %}
         </div>
-    </div>
+        <a href="{% url 'store:product_list' %}" class="link-arrow d-inline-flex mt-3"><i class="bi bi-bag me-1"></i>Shop for something new</a>
+    {% else %}
+        <div class="empty-state large-empty" data-reveal>
+            <i class="bi bi-box-seam"></i>
+            <h2>No orders yet</h2>
+            <p>Your first order is waiting to happen. Browse the shop and find something great.</p>
+            <a class="btn btn-accent rounded-pill px-4" href="{% url 'store:product_list' %}">Explore products<i class="bi bi-arrow-right ms-2"></i></a>
+        </div>
+    {% endif %}
 </section>
 {% endblock %}

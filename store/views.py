@@ -1,15 +1,16 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import SuspiciousFileOperation
+from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, FloatField, Q, Value
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.static import serve as static_serve
 from django.utils.cache import get_conditional_response
@@ -24,71 +25,191 @@ class OutOfStockError(Exception):
     """Raised inside the checkout transaction when inventory is not sufficient."""
 
 
-def home(request: HttpRequest) -> HttpResponse:
-    featured_products = Product.objects.filter(available=True, stock_quantity__gt=0).select_related(
-        "category"
-    )[:8]
-    categories = Category.objects.filter(
-        products__available=True, products__stock_quantity__gt=0
-    ).distinct()[:8]
-    return render(
-        request,
-        "store/home.html",
-        {"featured_products": featured_products, "categories": categories},
+# Sort options offered on the shop, category and deals pages. The value is the
+# URL parameter; orderings are applied after the effective-price annotation.
+SORT_OPTIONS = (
+    ("newest", "Newest arrivals"),
+    ("popular", "Most popular"),
+    ("price_asc", "Price: Low to High"),
+    ("price_desc", "Price: High to Low"),
+    ("discount", "Biggest discount"),
+)
+
+LISTING_PAGE_SIZE = 12
+
+
+def _annotated_products():
+    """Available products with the price they actually sell for attached.
+
+    ``effective_price`` (discount price when present, else list price) drives
+    the price range filter and price sorting without touching the stored data.
+    """
+    return (
+        Product.objects.filter(available=True)
+        .select_related("category")
+        .annotate(
+            effective_price=Coalesce(
+                "discount_price",
+                "price",
+                output_field=DecimalField(max_digits=10, decimal_places=2),
+            ),
+            order_count=Count("order_items"),
+            discount_fraction=ExpressionWrapper(
+                (F("price") - Coalesce("discount_price", F("price"))) * 100.0 / F("price"),
+                output_field=FloatField(),
+            ),
+        )
     )
 
 
-def product_list(request: HttpRequest) -> HttpResponse:
-    products = Product.objects.filter(available=True, stock_quantity__gt=0).select_related(
-        "category"
-    )
+def _parse_money(raw):
+    """Parse a price filter value, returning ``None`` for anything odd."""
+    if not raw:
+        return None
+    try:
+        value = Decimal(raw)
+    except (InvalidOperation, ValueError):
+        return None
+    if value < 0 or value > Decimal("99999999"):
+        return None
+    return value
+
+
+def _apply_listing_filters(request, products):
+    """Apply search, price range, sale and availability filters from GET."""
     query = request.GET.get("q", "").strip()
-    category_slug = request.GET.get("category", "").strip()
-
     if query:
         products = products.filter(
             Q(name__icontains=query)
             | Q(description__icontains=query)
             | Q(category__name__icontains=query)
         )
-    selected_category = None
-    if category_slug:
-        selected_category = Category.objects.filter(slug=category_slug).first()
-        if selected_category:
-            products = products.filter(category=selected_category)
 
-    context = {
-        "products": products,
+    min_price = _parse_money(request.GET.get("min_price", "").strip())
+    max_price = _parse_money(request.GET.get("max_price", "").strip())
+    if min_price is not None:
+        products = products.filter(effective_price__gte=min_price)
+    if max_price is not None:
+        products = products.filter(effective_price__lte=max_price)
+    if min_price is not None and max_price is not None and min_price > max_price:
+        # Swap instead of showing an impossible empty range.
+        min_price, max_price = max_price, min_price
+
+    on_sale = request.GET.get("sale") == "1"
+    if on_sale:
+        products = products.filter(discount_price__isnull=False)
+
+    # Storefront listings hide sold-out items unless the shopper asks to see
+    # them; ``available=False`` products stay hidden either way (admin switch).
+    stock_filter = request.GET.get("stock", "in")
+    if stock_filter != "all":
+        stock_filter = "in"
+        products = products.filter(stock_quantity__gt=0)
+
+    sort = request.GET.get("sort", "newest")
+    if sort == "price_asc":
+        products = products.order_by("effective_price", "-created_at")
+    elif sort == "price_desc":
+        products = products.order_by("-effective_price", "-created_at")
+    elif sort == "popular":
+        products = products.order_by("-order_count", "-created_at")
+    elif sort == "discount":
+        products = products.filter(discount_price__isnull=False).order_by(
+            "-discount_fraction", "-created_at"
+        )
+    else:
+        sort = "newest"
+        products = products.order_by("-created_at")
+
+    filters = {
         "query": query,
-        "categories": Category.objects.all(),
-        "selected_category": selected_category,
+        "min_price": request.GET.get("min_price", "").strip() if min_price is not None else "",
+        "max_price": request.GET.get("max_price", "").strip() if max_price is not None else "",
+        "on_sale": on_sale,
+        "stock_filter": stock_filter,
+        "sort": sort,
+    }
+    return products, filters
+
+
+def _sidebar_categories():
+    return Category.objects.annotate(
+        product_count=Count(
+            "products",
+            filter=Q(products__available=True, products__stock_quantity__gt=0),
+        )
+    ).order_by("name")
+
+
+def _render_listing(request, listing_extra, base_products):
+    """Shared listing pipeline: filter, sort, paginate, render."""
+    products, filters = _apply_listing_filters(request, base_products)
+    paginator = Paginator(products, LISTING_PAGE_SIZE)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    context = {
+        "products": page_obj.object_list,
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "categories": _sidebar_categories(),
+        "sort_options": SORT_OPTIONS,
+        **filters,
+        **listing_extra,
     }
     return render(request, "store/product_list.html", context)
 
 
-def category_products(request: HttpRequest, slug: str) -> HttpResponse:
-    category = get_object_or_404(Category, slug=slug)
-    products = Product.objects.filter(
-        category=category,
-        available=True,
-        stock_quantity__gt=0,
-    ).select_related("category")
-    query = request.GET.get("q", "").strip()
-    if query:
-        products = products.filter(
-            Q(name__icontains=query)
-            | Q(description__icontains=query)
-            | Q(category__name__icontains=query)
+def home(request: HttpRequest) -> HttpResponse:
+    in_stock = Q(products__available=True, products__stock_quantity__gt=0)
+    featured_products = Product.objects.filter(
+        available=True, stock_quantity__gt=0
+    ).select_related("category")[:8]
+    categories = (
+        Category.objects.annotate(product_count=Count("products", filter=in_stock))
+        .filter(product_count__gt=0)
+        .order_by("-product_count", "name")[:6]
+    )
+    category_cards = []
+    for category in categories:
+        sample = (
+            category.products.filter(available=True, stock_quantity__gt=0)
+            .exclude(image="")
+            .exclude(image__isnull=True)
+            .only("image")
+            .first()
         )
+        category_cards.append(
+            {"category": category, "product_count": category.product_count, "sample": sample}
+        )
+    deal_products = Product.objects.filter(
+        available=True, stock_quantity__gt=0, discount_price__isnull=False
+    ).select_related("category")[:4]
     return render(
         request,
-        "store/product_list.html",
+        "store/home.html",
         {
-            "products": products,
-            "query": query,
-            "categories": Category.objects.all(),
-            "selected_category": category,
+            "featured_products": featured_products,
+            "category_cards": category_cards,
+            "deal_products": deal_products,
         },
+    )
+
+
+def product_list(request: HttpRequest) -> HttpResponse:
+    return _render_listing(request, {"selected_category": None}, _annotated_products())
+
+
+def category_products(request: HttpRequest, slug: str) -> HttpResponse:
+    category = get_object_or_404(Category, slug=slug)
+    products = _annotated_products().filter(category=category)
+    return _render_listing(request, {"selected_category": category}, products)
+
+
+def deals(request: HttpRequest) -> HttpResponse:
+    products = _annotated_products().filter(discount_price__isnull=False)
+    return _render_listing(
+        request,
+        {"selected_category": None, "deals_page": True},
+        products,
     )
 
 
@@ -98,11 +219,15 @@ def product_detail(request: HttpRequest, slug: str) -> HttpResponse:
         slug=slug,
         available=True,
     )
-    related_products = Product.objects.filter(
-        category=product.category,
-        available=True,
-        stock_quantity__gt=0,
-    ).exclude(pk=product.pk)[:4]
+    related_products = (
+        Product.objects.filter(
+            category=product.category,
+            available=True,
+            stock_quantity__gt=0,
+        )
+        .exclude(pk=product.pk)
+        .select_related("category")[:4]
+    )
     return render(
         request,
         "store/product_detail.html",
@@ -131,6 +256,9 @@ def login_view(request: HttpRequest) -> HttpResponse:
     form = LoginForm(request=request, data=request.POST or None)
     if request.method == "POST" and form.is_valid():
         login(request, form.get_user())
+        if not form.cleaned_data.get("remember_me"):
+            # Session-only cookie: signed out when the browser closes.
+            request.session.set_expiry(0)
         messages.success(request, f"Welcome back, {form.get_user().get_username()}!")
         if next_url and url_has_allowed_host_and_scheme(
             next_url,
@@ -156,12 +284,25 @@ def _get_user_cart(request: HttpRequest) -> Cart:
     return cart
 
 
+def _cart_totals(items):
+    """Totals for the summary panel, including how much the discounts save."""
+    total = sum((item.subtotal for item in items), Decimal("0.00"))
+    regular_total = sum(
+        (item.product.price * item.quantity for item in items), Decimal("0.00")
+    )
+    return {
+        "cart_total": total,
+        "cart_regular_total": regular_total,
+        "cart_savings": regular_total - total,
+    }
+
+
 @login_required
 def cart_view(request: HttpRequest) -> HttpResponse:
     cart = _get_user_cart(request)
-    items = list(cart.items.select_related("product").all())
-    total = sum((item.subtotal for item in items), Decimal("0.00"))
-    return render(request, "store/cart.html", {"cart": cart, "items": items, "cart_total": total})
+    items = list(cart.items.select_related("product", "product__category").all())
+    context = {"cart": cart, "items": items, **_cart_totals(items)}
+    return render(request, "store/cart.html", context)
 
 
 @require_POST
@@ -198,6 +339,8 @@ def add_to_cart(request: HttpRequest, product_id: int) -> HttpResponse:
         item.save(update_fields=["quantity"])
     cart.save(update_fields=["updated_at"])
     messages.success(request, f"{product.name} was added to your cart.")
+    if request.POST.get("buy_now") == "1":
+        return redirect("store:checkout")
     return redirect("store:cart")
 
 
@@ -306,13 +449,9 @@ def checkout(request: HttpRequest) -> HttpResponse:
             return redirect("store:order_detail", order_number=order.order_number)
 
     # Re-read items after a validation error so the order summary is current.
-    items = list(cart.items.select_related("product").all())
-    cart_total = sum((item.subtotal for item in items), Decimal("0.00"))
-    return render(
-        request,
-        "store/checkout.html",
-        {"form": form, "cart": cart, "items": items, "cart_total": cart_total},
-    )
+    items = list(cart.items.select_related("product", "product__category").all())
+    context = {"form": form, "cart": cart, "items": items, **_cart_totals(items)}
+    return render(request, "store/checkout.html", context)
 
 
 @login_required
@@ -329,6 +468,29 @@ def order_detail(request: HttpRequest, order_number: str) -> HttpResponse:
         user=request.user,
     )
     return render(request, "store/order_detail.html", {"order": order})
+
+
+# Static information pages linked from the footer. Keeping them as real routes
+# avoids dead placeholder links in the storefront.
+INFO_PAGES = {
+    "shipping": ("Shipping policy", "store/info_pages.html", "shipping"),
+    "returns": ("Returns & refunds", "store/info_pages.html", "returns"),
+    "privacy": ("Privacy policy", "store/info_pages.html", "privacy"),
+    "terms": ("Terms of service", "store/info_pages.html", "terms"),
+}
+
+
+@require_http_methods(["GET"])
+def info_page(request: HttpRequest, page: str) -> HttpResponse:
+    entry = INFO_PAGES.get(page)
+    if entry is None:
+        raise Http404("Unknown information page.")
+    title, template, page_key = entry
+    return render(
+        request,
+        template,
+        {"page_title": title, "page_key": page_key},
+    )
 
 
 @require_http_methods(["GET", "HEAD"])

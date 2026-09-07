@@ -67,6 +67,11 @@ class LoginForm(forms.Form):
             }
         )
     )
+    remember_me = forms.BooleanField(
+        required=False,
+        label="Keep me signed in",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
 
     def __init__(self, request=None, *args, **kwargs):
         self.request = request
