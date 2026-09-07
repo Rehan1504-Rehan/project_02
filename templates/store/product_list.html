@@ -1,0 +1,35 @@
+{% extends 'store/base.html' %}
+{% block title %}{% if selected_category %}{{ selected_category.name }}{% else %}Shop all{% endif %} — Northstar Store{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div class="container py-5">
+        <span class="eyebrow">The collection</span>
+        <h1 class="page-title mt-2">{% if selected_category %}{{ selected_category.name }}{% elif query %}Search results{% else %}Shop all{% endif %}</h1>
+        {% if query %}<p class="lead text-muted mb-0">Showing results for “{{ query }}”</p>{% else %}<p class="lead text-muted mb-0">Useful things, carefully selected.</p>{% endif %}
+    </div>
+</section>
+<section class="container py-5">
+    <div class="row g-4">
+        <aside class="col-lg-3">
+            <div class="filter-card sticky-lg-top">
+                <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="filter-title mb-0">Filter by</h2><a href="{% url 'store:product_list' %}" class="small text-muted">Clear</a></div>
+                <div class="list-group list-group-flush">
+                    <a href="{% url 'store:product_list' %}" class="list-group-item list-group-item-action border-0 px-0 {% if not selected_category %}active-filter{% endif %}">All products</a>
+                    {% for category in categories %}
+                        <a href="{{ category.get_absolute_url }}" class="list-group-item list-group-item-action border-0 px-0 {% if selected_category.id == category.id %}active-filter{% endif %}">{{ category.name }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+        </aside>
+        <div class="col-lg-9">
+            {% if products %}
+                <div class="row g-4">
+                    {% for product in products %}<div class="col-12 col-sm-6 col-xl-4">{% include 'store/includes/product_card.html' %}</div>{% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state large-empty"><i class="bi bi-search"></i><h2>No products found</h2><p>Try a different search term or choose another category.</p><a class="btn btn-dark rounded-pill" href="{% url 'store:product_list' %}">View all products</a></div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
