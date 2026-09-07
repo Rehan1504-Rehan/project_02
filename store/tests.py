@@ -72,6 +72,29 @@ class StoreFlowTests(TestCase):
         self.assertRedirects(response, reverse("store:home"))
         self.assertFalse(response.wsgi_request.user.is_authenticated)
 
+    def test_left_navigation_drawer_uses_clean_category_names(self):
+        Category.objects.create(name="Gaming", description="Games and consoles")
+        Product.objects.create(
+            name="Arcade Pad",
+            description="A wired game controller.",
+            price=Decimal("20.00"),
+            category=Category.objects.get(name="Gaming"),
+            stock_quantity=2,
+            available=True,
+        )
+        response = self.client.get(reverse("store:home"))
+        self.assertContains(response, 'id="navDrawer"')
+        self.assertContains(response, "nav-drawer")
+        self.assertContains(response, "data-nav-open")
+        self.assertContains(response, "Electronics")
+        self.assertContains(response, "Gaming")
+        self.assertNotContains(response, "Electronics1")
+        self.assertNotContains(response, "Gaming1")
+        self.assertContains(response, reverse("store:product_list"))
+        self.assertContains(response, reverse("store:deals"))
+        self.assertContains(response, reverse("store:cart"))
+        self.assertContains(response, reverse("store:login"))
+
     def test_search_and_category_filter(self):
         other = Product.objects.create(
             name="Canvas Shoes",
