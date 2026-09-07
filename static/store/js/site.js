@@ -5,6 +5,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (hero) hero.classList.add("hero-no-motion");
     }
 
+    // Elevate the navbar once the page scrolls a little.
+    const nav = document.querySelector(".main-nav");
+    if (nav) {
+        const onScroll = () => nav.classList.toggle("is-scrolled", window.scrollY > 8);
+        onScroll();
+        window.addEventListener("scroll", onScroll, { passive: true });
+    }
+
+    // Quantity steppers used on product detail pages.
     document.querySelectorAll("[data-quantity-action]").forEach((button) => {
         button.addEventListener("click", () => {
             const control = button.closest(".quantity-control");

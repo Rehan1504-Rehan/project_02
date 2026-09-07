@@ -1,6 +1,53 @@
 {% extends 'store/base.html' %}
 {% block title %}My orders — Northstar Store{% endblock %}
 {% block content %}
-<section class="page-header"><div class="container py-5"><span class="eyebrow">Your Northstar</span><h1 class="page-title mt-2">My orders</h1><p class="lead text-muted mb-0">A record of the good things on their way to you.</p></div></section>
-<section class="container py-5"><div class="row justify-content-center"><div class="col-lg-10">{% if orders %}<div class="orders-table-wrap"><table class="table orders-table align-middle mb-0"><thead><tr><th>Order</th><th>Date</th><th>Items</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>{% for order in orders %}<tr><td><strong>#{{ order.order_number }}</strong></td><td>{{ order.created_at|date:'M j, Y' }}</td><td>{{ order.items.all|length }}</td><td><strong>${{ order.total_amount|floatformat:2 }}</strong></td><td><span class="status-pill status-{{ order.status }}">{{ order.get_status_display }}</span></td><td><a class="btn btn-sm btn-outline-dark rounded-pill" href="{{ order.get_absolute_url }}">Details</a></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty-state large-empty"><i class="bi bi-box-seam"></i><h2>No orders yet</h2><p>Your first order is waiting to happen.</p><a class="btn btn-dark rounded-pill" href="{% url 'store:product_list' %}">Explore products</a></div>{% endif %}</div></div></section>
+<section class="page-header">
+    <div class="container py-4 py-lg-5">
+        <span class="eyebrow"><span class="eyebrow-line"></span>Your Northstar</span>
+        <h1 class="page-title mt-2">My <em>orders</em></h1>
+        <p class="lead mb-0">A record of the good things on their way to you.</p>
+    </div>
+</section>
+<section class="container section-block pt-4 pt-lg-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-11 col-xl-10">
+            {% if orders %}
+                <div class="orders-table-wrap">
+                    <table class="table orders-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Order</th>
+                                <th>Date</th>
+                                <th>Items</th>
+                                <th>Total</th>
+                                <th>Status</th>
+                                <th class="text-end">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                                <tr>
+                                    <td><span class="order-number">#{{ order.order_number }}</span></td>
+                                    <td class="text-muted">{{ order.created_at|date:'M j, Y' }}</td>
+                                    <td>{{ order.items.all|length }}</td>
+                                    <td><strong>${{ order.total_amount|floatformat:2 }}</strong></td>
+                                    <td><span class="status-pill status-{{ order.status }}">{{ order.get_status_display }}</span></td>
+                                    <td class="text-end"><a class="btn btn-sm btn-outline-dark rounded-pill px-3" href="{{ order.get_absolute_url }}">View order <i class="bi bi-arrow-right ms-1"></i></a></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <a href="{% url 'store:product_list' %}" class="text-link d-inline-flex align-items-center gap-2 mt-4"><i class="bi bi-bag me-1"></i>Shop for something new</a>
+            {% else %}
+                <div class="empty-state large-empty">
+                    <i class="bi bi-box-seam"></i>
+                    <h2>No orders yet</h2>
+                    <p>Your first order is waiting to happen.</p>
+                    <a class="btn btn-brand rounded-pill px-4" href="{% url 'store:product_list' %}">Explore products <i class="bi bi-arrow-right ms-2"></i></a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
 {% endblock %}

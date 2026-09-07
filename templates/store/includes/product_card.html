@@ -1,30 +1,38 @@
 <article class="product-card h-100">
     <div class="product-image-wrap">
-        <a href="{{ product.get_absolute_url }}" class="text-decoration-none" aria-label="View {{ product.name }}">
+        <a href="{{ product.get_absolute_url }}" class="text-decoration-none d-block h-100" aria-label="View {{ product.name }}">
             {% if product.image %}
                 <img src="{{ product.image.url }}" class="product-image" alt="{{ product.name }}" loading="lazy">
             {% else %}
-                <div class="product-image placeholder-image"><i class="bi bi-box-seam"></i></div>
+                <div class="placeholder-image"><i class="bi bi-box-seam"></i></div>
             {% endif %}
         </a>
-        {% if product.has_discount %}<span class="product-tag">Sale</span>{% endif %}
+        {% if product.has_discount and product.is_in_stock %}<span class="product-tag tag-sale">Sale</span>
+        {% elif product.stock_quantity <= 5 and product.is_in_stock %}<span class="product-tag tag-low"><i class="bi bi-fire"></i>Almost gone</span>
+        {% elif not product.is_in_stock %}<span class="product-tag tag-soldout">Sold out</span>{% endif %}
     </div>
-    <div class="p-3 p-xl-4 d-flex flex-column flex-grow-1">
-        <div class="small text-muted mb-1">{% if product.category %}{{ product.category.name }}{% else %}Featured{% endif %}</div>
+    <div class="product-card-body">
+        <div class="product-category">{% if product.category %}{{ product.category.name }}{% else %}Featured{% endif %}</div>
         <h3 class="product-title"><a href="{{ product.get_absolute_url }}">{{ product.name }}</a></h3>
-        <div class="d-flex align-items-center gap-2 mb-3">
-            {% if product.has_discount %}<span class="price-current">${{ product.discount_price|floatformat:2 }}</span><span class="price-old">${{ product.price|floatformat:2 }}</span>{% else %}<span class="price-current">${{ product.price|floatformat:2 }}</span>{% endif %}
+        <div class="price-row">
+            {% if product.has_discount %}<span class="price-current">${{ product.discount_price|floatformat:2 }}</span><span class="price-old">${{ product.price|floatformat:2 }}</span>
+            {% else %}<span class="price-current">${{ product.price|floatformat:2 }}</span>{% endif %}
         </div>
-        <div class="mt-auto d-flex align-items-center justify-content-between gap-2">
-            <span class="stock-label"><i class="bi bi-check2-circle me-1"></i>{{ product.stock_quantity }} left</span>
-            {% if user.is_authenticated %}
-                <form method="post" action="{% url 'store:add_to_cart' product.id %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="quantity" value="1">
-                    <button class="btn btn-sm btn-dark rounded-pill" type="submit" aria-label="Add {{ product.name }} to cart"><i class="bi bi-plus-lg me-1"></i>Add</button>
-                </form>
+        <div class="card-actions d-flex align-items-center justify-content-between gap-2">
+            {% if product.is_in_stock %}
+                <span class="stock-label{% if product.stock_quantity <= 5 %} low{% endif %}"><i class="bi bi-check2-circle me-1"></i>{{ product.stock_quantity }} in stock</span>
+                {% if user.is_authenticated %}
+                    <form method="post" action="{% url 'store:add_to_cart' product.id %}" class="m-0 position-relative" style="z-index:2">
+                        {% csrf_token %}
+                        <input type="hidden" name="quantity" value="1">
+                        <button class="btn btn-brand btn-sm rounded-pill px-3" type="submit" aria-label="Add {{ product.name }} to cart"><i class="bi bi-plus-lg me-1"></i>Add</button>
+                    </form>
+                {% else %}
+                    <a class="btn btn-outline-dark btn-sm rounded-pill px-3" href="{% url 'store:login' %}?next={{ product.get_absolute_url|urlencode }}">View &amp; buy</a>
+                {% endif %}
             {% else %}
-                <a class="btn btn-sm btn-outline-dark rounded-pill" href="{% url 'store:login' %}?next={{ product.get_absolute_url|urlencode }}">View</a>
+                <span class="soldout-label">Sold out</span>
+                <a class="btn btn-sm btn-outline-dark rounded-pill px-3" href="{{ product.get_absolute_url }}">Details</a>
             {% endif %}
         </div>
     </div>
