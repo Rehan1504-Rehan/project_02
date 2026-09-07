@@ -27,7 +27,8 @@
                         <span class="avatar-chip">{{ user.username|slice:':1'|upper }}</span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end shadow account-menu">
-                        <li><h6 class="dropdown-header">Hi, {{ user.first_name|default:user.username }}</h6></li>
+                        <li><h6 class="dropdown-header">My account</h6></li>
+                        <li><a class="dropdown-item" href="{% url 'store:profile' %}"><i class="bi bi-person-circle me-2"></i>Profile</a></li>
                         <li><a class="dropdown-item" href="{% url 'store:order_list' %}"><i class="bi bi-box-seam me-2"></i>My orders</a></li>
                         <li><a class="dropdown-item" href="{% url 'store:cart' %}"><i class="bi bi-cart3 me-2"></i>My cart</a></li>
                         <li><a class="dropdown-item" href="{% url 'store:product_list' %}"><i class="bi bi-grid me-2"></i>Continue shopping</a></li>
@@ -126,14 +127,14 @@
             </li>
             <li>
                 {% if user.is_authenticated %}
-                    <a class="drawer-link{% if request.resolver_match.url_name == 'order_list' or request.resolver_match.url_name == 'order_detail' %} is-active{% endif %}" href="{% url 'store:order_list' %}">
-                        <i class="bi bi-person" aria-hidden="true"></i>
-                        <span>Account</span>
+                    <a class="drawer-link{% if request.resolver_match.url_name == 'profile' or request.resolver_match.url_name == 'profile_edit' or request.resolver_match.url_name == 'change_password' %} is-active{% endif %}" href="{% url 'store:profile' %}">
+                        <i class="bi bi-person-circle" aria-hidden="true"></i>
+                        <span>Profile</span>
                     </a>
                 {% else %}
-                    <a class="drawer-link{% if request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'register' %} is-active{% endif %}" href="{% url 'store:login' %}">
-                        <i class="bi bi-person" aria-hidden="true"></i>
-                        <span>Account / Login</span>
+                    <a class="drawer-link{% if request.resolver_match.url_name == 'login' %} is-active{% endif %}" href="{% url 'store:login' %}">
+                        <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
+                        <span>Sign In</span>
                     </a>
                 {% endif %}
             </li>
@@ -151,11 +152,11 @@
                 {% csrf_token %}
                 <button class="drawer-link drawer-signout" type="submit">
                     <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
-                    <span>Sign out</span>
+                    <span>Logout</span>
                 </button>
             </form>
         {% else %}
-            <a class="btn btn-accent rounded-pill w-100 drawer-cta" href="{% url 'store:register' %}">Create an account</a>
+            <a class="btn btn-accent rounded-pill w-100 drawer-cta" href="{% url 'store:register' %}">Create Account</a>
         {% endif %}
     </nav>
 </aside>

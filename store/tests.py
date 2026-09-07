@@ -380,6 +380,90 @@ class StartupTaskTests(TestCase):
             run_startup_tasks()  # must not raise: the site still has to boot
 
 
+class ProfileTests(TestCase):
+    """The Profile page is private, dynamic, and editable."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="shopper",
+            email="shopper@example.com",
+            password="Strong-password-123",
+            first_name="Shop",
+            last_name="Per",
+        )
+
+    def login(self):
+        self.assertTrue(self.client.login(username="shopper", password="Strong-password-123"))
+
+    def test_profile_requires_authentication(self):
+        response = self.client.get(reverse("store:profile"))
+        self.assertRedirects(
+            response, f"{reverse('store:login')}?next={reverse('store:profile')}"
+        )
+
+    def test_profile_shows_the_logged_in_users_own_details(self):
+        self.login()
+        response = self.client.get(reverse("store:profile"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "shopper")
+        self.assertContains(response, "Shop")
+        self.assertContains(response, "Per")
+        self.assertContains(response, "shopper@example.com")
+        self.assertContains(response, reverse("store:profile_edit"))
+        self.assertContains(response, reverse("store:change_password"))
+        self.assertContains(response, reverse("store:logout"))
+        self.assertNotContains(response, "Admin")
+
+    def test_edit_profile_updates_details_and_returns_to_profile(self):
+        self.login()
+        response = self.client.post(
+            reverse("store:profile_edit"),
+            {"first_name": "Shop", "last_name": "Pernick", "email": "new@example.com"},
+        )
+        self.assertRedirects(response, reverse("store:profile"))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, "Shop")
+        self.assertEqual(self.user.last_name, "Pernick")
+        self.assertEqual(self.user.email, "new@example.com")
+
+    def test_edit_profile_rejects_an_email_owned_by_someone_else(self):
+        User.objects.create_user(username="other", email="other@example.com", password="x")
+        self.login()
+        response = self.client.post(
+            reverse("store:profile_edit"),
+            {"first_name": "Shop", "last_name": "Per", "email": "other@example.com"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "already exists")
+
+    def test_change_password_updates_and_keeps_the_session(self):
+        self.login()
+        response = self.client.post(
+            reverse("store:change_password"),
+            {
+                "old_password": "Strong-password-123",
+                "new_password1": "New-strong-password-456",
+                "new_password2": "New-strong-password-456",
+            },
+        )
+        self.assertRedirects(response, reverse("store:profile"))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("New-strong-password-456"))
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+
+    def test_drawer_shows_profile_when_signed_in_and_not_when_signed_out(self):
+        self.login()
+        response = self.client.get(reverse("store:home"))
+        self.assertContains(response, reverse("store:profile"))
+        self.assertNotContains(response, "Hi,")
+
+        self.client.logout()
+        response = self.client.get(reverse("store:home"))
+        self.assertNotContains(response, reverse("store:profile"))
+        self.assertContains(response, reverse("store:login"))
+        self.assertContains(response, reverse("store:register"))
+
+
 class AdminSetupCommandTests(TestCase):
     def test_create_admin_uses_environment_and_is_idempotent(self):
         env = {

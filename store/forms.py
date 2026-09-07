@@ -47,6 +47,39 @@ class RegistrationForm(UserCreationForm):
         return email
 
 
+class ProfileForm(forms.ModelForm):
+    """Editable account details for the storefront Profile page.
+
+    Reuses Django's built-in user model so there is no duplicate profile
+    table; the fields here live directly on the authenticated user.
+    """
+
+    first_name = forms.CharField(max_length=150, required=True)
+    last_name = forms.CharField(max_length=150, required=True)
+
+    class Meta:
+        model = User
+        fields = ("first_name", "last_name", "email")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        placeholders = {
+            "first_name": "First name",
+            "last_name": "Last name",
+            "email": "you@example.com",
+        }
+        for name, field in self.fields.items():
+            field.widget.attrs.update({"class": "form-control form-control-lg"})
+            if name in placeholders:
+                field.widget.attrs["placeholder"] = placeholders[name]
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if User.objects.filter(email__iexact=email).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("An account with this email already exists.")
+        return email
+
+
 class LoginForm(forms.Form):
     identifier = forms.CharField(
         label="Username or email",
