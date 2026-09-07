@@ -1,4 +1,10 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // Respect reduced-motion: settle the hero art, stamp, and ticker.
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const hero = document.querySelector(".hero-section");
+        if (hero) hero.classList.add("hero-no-motion");
+    }
+
     document.querySelectorAll("[data-quantity-action]").forEach((button) => {
         button.addEventListener("click", () => {
             const control = button.closest(".quantity-control");

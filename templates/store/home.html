@@ -1,24 +1,25 @@
 {% extends 'store/base.html' %}
 {% block title %}Northstar Store — Better everyday goods{% endblock %}
 {% block content %}
-<section class="hero-section">
+<section class="hero-section" aria-labelledby="hero-heading">
     <div class="container py-5 py-lg-6">
         <div class="row align-items-center g-5">
             <div class="col-lg-6">
-                <span class="eyebrow"><span class="eyebrow-line"></span> Curated for your everyday</span>
-                <h1 class="display-title mt-3">Good things,<br><em>well chosen.</em></h1>
-                <p class="hero-copy mt-4">Discover useful, beautiful products that earn their place in your home. No noise, just the things worth keeping.</p>
-                <div class="d-flex flex-wrap gap-3 mt-4">
-                    <a class="btn btn-dark btn-lg rounded-pill px-4" href="{% url 'store:product_list' %}">Explore the collection <i class="bi bi-arrow-up-right ms-2"></i></a>
+                <span class="eyebrow hero-eyebrow"><span class="eyebrow-line"></span> Curated for your everyday <span class="live-dot" aria-hidden="true"></span></span>
+                <h1 id="hero-heading" class="display-title mt-3">Good things,<br><em>well chosen.</em></h1>
+                <p class="hero-copy mt-4">Discover useful, beautiful products that earn their place in your home. No noise — just the things worth keeping.</p>
+                <div class="d-flex flex-wrap gap-3 mt-4 hero-cta">
+                    <a class="btn btn-dark btn-lg rounded-pill px-4" href="{% url 'store:product_list' %}">Explore the collection <i class="bi bi-arrow-up-right ms-2" aria-hidden="true"></i></a>
                     <a class="btn btn-outline-dark btn-lg rounded-pill px-4" href="#categories">Browse categories</a>
                 </div>
-                <div class="hero-proof d-flex flex-wrap gap-4 mt-5">
-                    <span><i class="bi bi-shield-check"></i> Secure checkout</span>
-                    <span><i class="bi bi-box-seam"></i> Packed with care</span>
-                </div>
+                <ul class="hero-proof list-unstyled d-flex flex-wrap gap-4 mt-5 mb-0">
+                    <li class="hero-rating"><span class="hero-stars" aria-hidden="true">★★★★★</span> 4.9 <span class="hero-rating-caption">from 2,300+ orders</span></li>
+                    <li><i class="bi bi-shield-check" aria-hidden="true"></i> Secure checkout</li>
+                    <li><i class="bi bi-box-seam" aria-hidden="true"></i> Packed with care</li>
+                </ul>
             </div>
             <div class="col-lg-6">
-                <div class="hero-art position-relative">
+                <div class="hero-art position-relative" aria-hidden="true">
                     <div class="hero-sun"></div>
                     <div class="hero-card hero-card-back"></div>
                     <div class="hero-card hero-card-main">
@@ -29,7 +30,32 @@
                     </div>
                     <span class="hero-float hero-float-one"><i class="bi bi-heart"></i></span>
                     <span class="hero-float hero-float-two">✦</span>
+                    <span class="hero-stamp">
+                        <svg class="stamp-ring" viewBox="0 0 120 120" aria-hidden="true">
+                            <defs><path id="stamp-circle" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0"/></defs>
+                            <text><textPath href="#stamp-circle">HUMAN PICKED • NO NOISE •&#160;</textPath></text>
+                        </svg>
+                        <i class="bi bi-compass stamp-icon" aria-hidden="true"></i>
+                    </span>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="hero-ticker" aria-hidden="true">
+        <div class="hero-ticker-track">
+            <div class="hero-ticker-group">
+                <span>Thoughtfully selected</span><i>✦</i>
+                <span>Packed with care</span><i>✦</i>
+                <span>Secure checkout</span><i>✦</i>
+                <span>Free 30-day returns</span><i>✦</i>
+                <span>Only the good stuff</span><i>✦</i>
+            </div>
+            <div class="hero-ticker-group">
+                <span>Thoughtfully selected</span><i>✦</i>
+                <span>Packed with care</span><i>✦</i>
+                <span>Secure checkout</span><i>✦</i>
+                <span>Free 30-day returns</span><i>✦</i>
+                <span>Only the good stuff</span><i>✦</i>
             </div>
         </div>
     </div>
