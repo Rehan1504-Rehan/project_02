@@ -37,7 +37,7 @@ def storefront_context(request):
                     "products",
                     filter=Q(products__available=True, products__stock_quantity__gt=0),
                 )
-            ).filter(product_count__gt=0)[:10]
+            ).filter(product_count__gt=0)
         )
         deals_available = Product.objects.filter(
             available=True,

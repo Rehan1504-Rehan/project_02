@@ -8,7 +8,7 @@ from django.contrib.auth.forms import PasswordChangeForm
 from django.core.exceptions import SuspiciousFileOperation
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, FloatField, Q, Value
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, FloatField, Prefetch, Q, Value
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -164,22 +164,36 @@ def home(request: HttpRequest) -> HttpResponse:
     featured_products = Product.objects.filter(
         available=True, stock_quantity__gt=0
     ).select_related("category")[:8]
-    categories = (
+    # Every category that currently has stock gets the same homepage treatment
+    # as All Products / Electronics / Gaming: a shop-by card plus a product
+    # shelf. Empty categories stay off the storefront until they have items.
+    categories = list(
         Category.objects.annotate(product_count=Count("products", filter=in_stock))
         .filter(product_count__gt=0)
-        .order_by("-product_count", "name")[:6]
+        .order_by("name")
+        .prefetch_related(
+            Prefetch(
+                "products",
+                queryset=Product.objects.filter(available=True, stock_quantity__gt=0)
+                .select_related("category"),
+                to_attr="in_stock_products",
+            )
+        )
     )
     category_cards = []
+    category_sections = []
     for category in categories:
-        sample = (
-            category.products.filter(available=True, stock_quantity__gt=0)
-            .exclude(image="")
-            .exclude(image__isnull=True)
-            .only("image")
-            .first()
-        )
+        products = list(category.in_stock_products)
+        sample = next((item for item in products if item.image), None)
         category_cards.append(
             {"category": category, "product_count": category.product_count, "sample": sample}
+        )
+        category_sections.append(
+            {
+                "category": category,
+                "products": products[:8],
+                "product_count": category.product_count,
+            }
         )
     deal_products = Product.objects.filter(
         available=True, stock_quantity__gt=0, discount_price__isnull=False
@@ -190,6 +204,7 @@ def home(request: HttpRequest) -> HttpResponse:
         {
             "featured_products": featured_products,
             "category_cards": category_cards,
+            "category_sections": category_sections,
             "deal_products": deal_products,
         },
     )

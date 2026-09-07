@@ -59,7 +59,7 @@
                 <nav class="footer-col" aria-label="Shop links">
                     <h6 class="footer-heading">Shop</h6>
                     <a href="{% url 'store:product_list' %}">All products</a>
-                    {% for category in nav_categories|slice:':2' %}
+                    {% for category in nav_categories %}
                         <a href="{{ category.get_absolute_url }}">{{ category.name }}</a>
                     {% endfor %}
                     {% if deals_available %}<a href="{% url 'store:deals' %}">Deals</a>{% endif %}
