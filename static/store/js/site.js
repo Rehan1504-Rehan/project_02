@@ -11,6 +11,74 @@ document.addEventListener("DOMContentLoaded", () => {
         window.addEventListener("scroll", onScroll, { passive: true });
     }
 
+    // --- Left slide navigation drawer -------------------------------------
+    const drawer = document.getElementById("navDrawer");
+    const overlay = document.getElementById("navOverlay");
+    const openers = document.querySelectorAll("[data-nav-open]");
+    const accordionBtn = document.querySelector("[data-nav-accordion]");
+    const accordionPanel = document.getElementById("navCategories");
+    let previousOverflow = "";
+    let previousPadding = "";
+
+    if (drawer) {
+        drawer.inert = true;
+    }
+
+    const setNavOpen = (open) => {
+        if (!drawer || !overlay) return;
+        drawer.classList.toggle("is-open", open);
+        overlay.classList.toggle("is-open", open);
+        document.documentElement.classList.toggle("nav-lock", open);
+        document.body.classList.toggle("nav-lock", open);
+        drawer.setAttribute("aria-hidden", open ? "false" : "true");
+        drawer.inert = !open;
+        openers.forEach((btn) => btn.setAttribute("aria-expanded", open ? "true" : "false"));
+        if (open) {
+            previousOverflow = document.body.style.overflow;
+            previousPadding = document.body.style.paddingRight;
+            const scrollbar = window.innerWidth - document.documentElement.clientWidth;
+            document.body.style.overflow = "hidden";
+            if (scrollbar > 0) {
+                document.body.style.paddingRight = `${scrollbar}px`;
+            }
+            const closeBtn = drawer.querySelector("[data-nav-close]");
+            if (closeBtn) closeBtn.focus();
+        } else {
+            document.body.style.overflow = previousOverflow;
+            document.body.style.paddingRight = previousPadding;
+        }
+    };
+
+    openers.forEach((btn) => {
+        btn.addEventListener("click", () => setNavOpen(true));
+    });
+    document.querySelectorAll("[data-nav-close]").forEach((el) => {
+        el.addEventListener("click", () => setNavOpen(false));
+    });
+    drawer &&
+        drawer.querySelectorAll("a").forEach((link) => {
+            link.addEventListener("click", () => setNavOpen(false));
+        });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && drawer && drawer.classList.contains("is-open")) {
+            setNavOpen(false);
+        }
+    });
+
+    if (accordionBtn && accordionPanel) {
+        const setAccordion = (expanded) => {
+            accordionBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+            accordionBtn.classList.toggle("is-expanded", expanded);
+            accordionPanel.hidden = !expanded;
+        };
+        accordionBtn.addEventListener("click", () => {
+            setAccordion(accordionBtn.getAttribute("aria-expanded") !== "true");
+        });
+        if (accordionBtn.dataset.navAccordionOpen === "true") {
+            setAccordion(true);
+        }
+    }
+
     // --- Scroll-in reveal animations ---------------------------------------
     const revealEls = document.querySelectorAll("[data-reveal]");
     if (reduceMotion || !("IntersectionObserver" in window)) {
