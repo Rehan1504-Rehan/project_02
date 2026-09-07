@@ -41,6 +41,7 @@ project_02/
 │   ├── __init__.py
 │   ├── asgi.py
 │   ├── settings.py
+│   ├── startup.py
 │   ├── urls.py
 │   └── wsgi.py
 ├── store/
@@ -237,6 +238,7 @@ In Admin, open **Products** to change prices, discount prices, descriptions, cat
 | `SERVE_MEDIA` | `True` | Django serves `/media/` itself. Set `False` only when a CDN or object store answers that path. |
 | `MEDIA_CACHE_SECONDS` | `3600` | Browser cache lifetime for uploaded images. ETags still allow instant revalidation. |
 | `MAX_IMAGE_UPLOAD_MB` | `5` | Largest product image an admin may upload. Uploads are held in memory, so keep this modest. |
+| `RUN_STARTUP_TASKS` | `True` | Applies pending migrations when the web process boots, and clears references to uploads lost to an earlier ephemeral filesystem. |
 
 Django will use SQLite when `DATABASE_URL` is empty. When `DATABASE_URL` is set, `dj-database-url` configures the database, including Railway's PostgreSQL URL.
 
@@ -333,8 +335,14 @@ Render builds from the repository and runs the app as a web service.
 
 | Setting | Value |
 | --- | --- |
-| Build command | `./build.sh` (installs dependencies, collects static files, **runs migrations**) |
+| Build command | `./build.sh` (installs dependencies, collects static files, runs migrations) |
 | Start command | `gunicorn ecommerce.wsgi --log-file -` |
+
+The app also applies any pending migrations itself when the web process boots,
+so a service that only sets a start command still ends up with a correct
+database. `build.sh` is still the tidier place to do it, because migrating
+during the build keeps boots fast. Set `RUN_STARTUP_TASKS=False` to turn the
+startup behaviour off.
 
 Required environment variables on the web service:
 
@@ -352,9 +360,10 @@ file stored there loses all products, orders and images. Attach a managed
 PostgreSQL database and the data - including the product images, which are
 stored in the database - persists.
 
-Make sure the build command runs `migrate`. Uploaded images live in the
-`store_mediafile` table, so a deploy that skips migrations leaves the admin
-unable to save an image.
+On its first boot after this change the app also clears product images whose
+file was destroyed by an earlier redeploy, so the storefront shows its neutral
+placeholder instead of a broken image. Upload those pictures again in Django
+Admin and they will persist from then on.
 
 ## Database and price behavior
 

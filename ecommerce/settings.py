@@ -158,6 +158,11 @@ MAX_IMAGE_UPLOAD_BYTES = int(MAX_IMAGE_UPLOAD_MB * 1024 * 1024)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Apply pending migrations when the web server boots, so a deployment whose
+# build step does not run `manage.py migrate` still works. See
+# ecommerce/startup.py. Set False if migrations are handled by the platform.
+RUN_STARTUP_TASKS = env_bool("RUN_STARTUP_TASKS", True)
+
 LOGIN_URL = "store:login"
 LOGIN_REDIRECT_URL = "store:home"
 LOGOUT_REDIRECT_URL = "store:home"

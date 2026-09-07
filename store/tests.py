@@ -12,6 +12,8 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from ecommerce.startup import run_startup_tasks
+
 from .admin import ProductAdminForm
 from .models import CartItem, Category, MediaFile, Order, OrderItem, Product
 
@@ -283,6 +285,76 @@ class MediaPersistenceTests(TestCase):
         )
         self.assertFalse(form.is_valid())
         self.assertIn("image", form.errors)
+
+
+class StartupTaskTests(TestCase):
+    """The web process repairs itself on boot, with no dashboard steps."""
+
+    def test_startup_clears_references_to_files_lost_with_the_old_disk(self):
+        product = Product.objects.create(
+            name="Smart Plug",
+            description="A useful plug.",
+            price=Decimal("12.00"),
+            stock_quantity=5,
+        )
+        # Exactly the situation on the live site: the row survived in the
+        # database, the file did not survive the redeploy.
+        Product.objects.filter(pk=product.pk).update(
+            image="products/2026/09/standard_smart_plug.webp"
+        )
+
+        run_startup_tasks()
+
+        product.refresh_from_db()
+        self.assertFalse(product.image)
+        # The storefront now shows the placeholder instead of a broken image.
+        response = self.client.get(product.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "placeholder-image")
+
+    def test_startup_keeps_images_that_are_present(self):
+        product = Product.objects.create(
+            name="Desk Lamp",
+            description="A warm lamp.",
+            price=Decimal("40.00"),
+            stock_quantity=2,
+            image=SimpleUploadedFile("lamp.png", ONE_PIXEL_PNG, content_type="image/png"),
+        )
+        run_startup_tasks()
+        product.refresh_from_db()
+        self.assertTrue(product.image)
+        self.assertEqual(self.client.get(product.image.url).status_code, 200)
+
+    def test_startup_is_a_no_op_for_disk_backed_media(self):
+        """A slow disk mount must never cause a reference to be discarded."""
+        product = Product.objects.create(
+            name="Mug",
+            description="A mug.",
+            price=Decimal("9.00"),
+            stock_quantity=1,
+        )
+        Product.objects.filter(pk=product.pk).update(image="products/2026/09/mug.jpg")
+        with override_settings(MEDIA_STORAGE="filesystem"):
+            run_startup_tasks()
+        product.refresh_from_db()
+        self.assertEqual(product.image.name, "products/2026/09/mug.jpg")
+
+    def test_startup_can_be_disabled(self):
+        product = Product.objects.create(
+            name="Kettle",
+            description="A kettle.",
+            price=Decimal("30.00"),
+            stock_quantity=1,
+        )
+        Product.objects.filter(pk=product.pk).update(image="products/2026/09/gone.jpg")
+        with override_settings(RUN_STARTUP_TASKS=False):
+            run_startup_tasks()
+        product.refresh_from_db()
+        self.assertEqual(product.image.name, "products/2026/09/gone.jpg")
+
+    def test_startup_survives_a_broken_database(self):
+        with patch("ecommerce.startup._apply_pending_migrations", side_effect=OSError("boom")):
+            run_startup_tasks()  # must not raise: the site still has to boot
 
 
 class AdminSetupCommandTests(TestCase):
