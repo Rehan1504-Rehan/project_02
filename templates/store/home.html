@@ -1,61 +1,62 @@
 {% extends 'store/base.html' %}
-{% block title %}Northstar Store — Better everyday goods{% endblock %}
+{% load store_extras %}
+{% block title %}Northstar Store — Everything You Want. Better Prices.{% endblock %}
 {% block content %}
-<section class="hero-section" aria-labelledby="hero-heading">
+<section class="hero" aria-labelledby="hero-heading">
+    <div class="hero-bg" aria-hidden="true"><span class="hero-blob blob-a"></span><span class="hero-blob blob-b"></span></div>
     <div class="container hero-inner">
         <div class="row align-items-center g-5">
             <div class="col-lg-6">
-                <span class="eyebrow hero-eyebrow"><span class="eyebrow-line"></span> Curated for your everyday <span class="live-dot" aria-hidden="true"></span></span>
-                <h1 id="hero-heading" class="display-title">Good things,<br><em>well chosen.</em></h1>
-                <p class="hero-copy">Discover useful, beautiful products that earn their place in your home. No noise — just the things worth keeping.</p>
-                <div class="d-flex flex-wrap gap-3 hero-cta">
-                    <a class="btn btn-brand btn-lg rounded-pill px-4" href="{% url 'store:product_list' %}">Explore the collection <i class="bi bi-arrow-up-right ms-2" aria-hidden="true"></i></a>
-                    <a class="btn btn-outline-dark btn-lg rounded-pill px-4" href="#categories">Browse categories</a>
+                <span class="hero-chip" data-reveal><i class="bi bi-lightning-charge-fill"></i>New season deals are live</span>
+                <h1 id="hero-heading" class="hero-title" data-reveal style="--d:.08s">Everything You Want.<br><span class="grad-text">Better Prices.</span></h1>
+                <p class="hero-copy" data-reveal style="--d:.16s">Shop premium electronics, gaming gear and everyday tech — hand-picked for quality, honestly priced, and delivered fast to your door.</p>
+                <div class="hero-cta" data-reveal style="--d:.24s">
+                    <a class="btn btn-accent btn-lg rounded-pill px-4" href="{% url 'store:product_list' %}">Shop Now<i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></a>
+                    <a class="btn btn-ghost-dark btn-lg rounded-pill px-4" href="#categories">Explore Categories</a>
                 </div>
-                <ul class="hero-proof list-unstyled">
-                    <li class="hero-rating"><span class="hero-stars" aria-hidden="true">★★★★★</span> 4.9 <span class="hero-rating-caption">from 2,300+ orders</span></li>
-                    <li><i class="bi bi-shield-check" aria-hidden="true"></i> Secure checkout</li>
-                    <li><i class="bi bi-box-seam" aria-hidden="true"></i> Packed with care</li>
+                <ul class="hero-trust list-unstyled" data-reveal style="--d:.32s">
+                    <li><i class="bi bi-truck"></i><span><b>Free shipping</b><small>On orders above ₹999</small></span></li>
+                    <li><i class="bi bi-shield-check"></i><span><b>Secure checkout</b><small>Your data stays private</small></span></li>
+                    <li><i class="bi bi-arrow-repeat"></i><span><b>Easy returns</b><small>30-day money back</small></span></li>
                 </ul>
             </div>
             <div class="col-lg-6">
-                <div class="hero-art position-relative" aria-hidden="true">
-                    <div class="hero-sun"></div>
-                    <div class="hero-card hero-card-back"></div>
-                    <div class="hero-card hero-card-main">
-                        <div class="hero-card-label">The edit / 01</div>
-                        <div class="hero-product-shape"><i class="bi bi-stars"></i></div>
-                        <div class="hero-card-name">Objects with<br>purpose.</div>
-                        <div class="hero-card-footer"><span>northstar</span><span><i class="bi bi-arrow-up-right"></i></span></div>
-                    </div>
-                    <span class="hero-float hero-float-one"><i class="bi bi-heart"></i></span>
-                    <span class="hero-float hero-float-two">✦</span>
-                    <span class="hero-stamp">
-                        <svg class="stamp-ring" viewBox="0 0 120 120">
-                            <defs><path id="stamp-circle" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0"/></defs>
-                            <text><textPath href="#stamp-circle">HUMAN PICKED • NO NOISE •&#160;</textPath></text>
-                        </svg>
-                        <i class="bi bi-compass stamp-icon"></i>
-                    </span>
+                {% with hero1=featured_products|first hero2=featured_products|slice:'1:2'|first %}
+                <div class="hero-stage" data-reveal style="--d:.18s">
+                    <div class="hero-stage-glow" aria-hidden="true"></div>
+                    {% if hero1 and hero1.image %}
+                        <a class="hero-card hero-card-main shadow-lg" href="{{ hero1.get_absolute_url }}">
+                            {% with off=hero1|discount_percent %}{% if hero1.has_discount and off %}<span class="hero-float-badge"><i class="bi bi-lightning-charge-fill"></i>{{ off }}% OFF</span>{% endif %}{% endwith %}
+                            <img src="{{ hero1.image.url }}" alt="{{ hero1.name }}" class="hero-card-img" fetchpriority="high" data-fallback>
+                            <span class="hero-card-meta">
+                                <span class="hero-card-cat">{% if hero1.category %}{{ hero1.category.name }}{% else %}Featured{% endif %}</span>
+                                <span class="hero-card-name">{{ hero1.name|truncatechars:34 }}</span>
+                                <span class="hero-card-price">{{ hero1.get_price|inr }}{% if hero1.has_discount %}<s>{{ hero1.price|inr }}</s>{% endif %}</span>
+                            </span>
+                        </a>
+                    {% else %}
+                        <a class="hero-card hero-card-main hero-card-empty shadow-lg" href="{% url 'store:product_list' %}">
+                            <i class="bi bi-bag-heart"></i>
+                            <span class="hero-card-meta">
+                                <span class="hero-card-cat">Northstar Store</span>
+                                <span class="hero-card-name">Hand-picked products at honest prices</span>
+                                <span class="hero-card-price">Browse the shop</span>
+                            </span>
+                        </a>
+                    {% endif %}
+                    {% if hero2 and hero2.image %}
+                        <a class="hero-card hero-card-side shadow" href="{{ hero2.get_absolute_url }}">
+                            <img src="{{ hero2.image.url }}" alt="{{ hero2.name }}" class="hero-card-img" loading="lazy" decoding="async" data-fallback>
+                            <span class="hero-card-meta">
+                                <span class="hero-card-name">{{ hero2.name|truncatechars:26 }}</span>
+                                <span class="hero-card-price">{{ hero2.get_price|inr }}</span>
+                            </span>
+                        </a>
+                    {% endif %}
+                    <span class="hero-chip-float chip-free" aria-hidden="true"><i class="bi bi-truck"></i>Free delivery</span>
+                    <span class="hero-chip-float chip-star" aria-hidden="true"><i class="bi bi-shield-check"></i>Genuine products</span>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div class="hero-ticker" aria-hidden="true">
-        <div class="hero-ticker-track">
-            <div class="hero-ticker-group">
-                <span>Thoughtfully selected</span><i>✦</i>
-                <span>Packed with care</span><i>✦</i>
-                <span>Secure checkout</span><i>✦</i>
-                <span>Free 30-day returns</span><i>✦</i>
-                <span>Only the good stuff</span><i>✦</i>
-            </div>
-            <div class="hero-ticker-group">
-                <span>Thoughtfully selected</span><i>✦</i>
-                <span>Packed with care</span><i>✦</i>
-                <span>Secure checkout</span><i>✦</i>
-                <span>Free 30-day returns</span><i>✦</i>
-                <span>Only the good stuff</span><i>✦</i>
+                {% endwith %}
             </div>
         </div>
     </div>
@@ -63,61 +64,48 @@
 
 <div class="props-bar">
     <div class="container">
-        <div class="row">
+        <div class="row g-2">
+            <div class="col-6 col-lg-3"><div class="prop"><i class="bi bi-truck"></i><span><b>Fast shipping</b><small>Dispatch in 24–48h</small></span></div></div>
             <div class="col-6 col-lg-3"><div class="prop"><i class="bi bi-arrow-repeat"></i><span><b>30-day returns</b><small>No questions asked</small></span></div></div>
-            <div class="col-6 col-lg-3"><div class="prop"><i class="bi bi-truck"></i><span><b>Fast, careful shipping</b><small>Fully tracked, always</small></span></div></div>
-            <div class="col-6 col-lg-3"><div class="prop"><i class="bi bi-hand-thumbs-up"></i><span><b>Human-tested picks</b><small>Lived with, then listed</small></span></div></div>
-            <div class="col-6 col-lg-3"><div class="prop"><i class="bi bi-lock"></i><span><b>Secure checkout</b><small>Your details stay private</small></span></div></div>
+            <div class="col-6 col-lg-3"><div class="prop"><i class="bi bi-patch-check"></i><span><b>Genuine products</b><small>Quality checked</small></span></div></div>
+            <div class="col-6 col-lg-3"><div class="prop"><i class="bi bi-headset"></i><span><b>Real support</b><small>Humans, not bots</small></span></div></div>
         </div>
     </div>
 </div>
 
 <section class="section-block" id="categories">
     <div class="container">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+        <div class="section-head" data-reveal>
             <div>
-                <span class="eyebrow"><span class="eyebrow-line"></span>Start somewhere</span>
-                <h2 class="section-title mt-2">Shop by <em>mood</em></h2>
-                <p class="section-kicker">Three small collections, one shared standard: it has to earn its place in your home.</p>
+                <span class="eyebrow">Browse collections</span>
+                <h2 class="section-title">Shop by Category</h2>
             </div>
-            <a class="text-link text-nowrap" href="{% url 'store:product_list' %}">See everything <i class="bi bi-arrow-up-right"></i></a>
+            <a class="link-arrow" href="{% url 'store:product_list' %}">View all products<i class="bi bi-arrow-right"></i></a>
         </div>
-        <div class="row g-3 g-lg-4">
-            {% for category in categories %}
-                <div class="col-6 col-md-4 col-lg-3">
-                    <a class="category-tile" href="{{ category.get_absolute_url }}">
-                        <span class="category-icon"><i class="bi {% cycle 'bi-laptop' 'bi-cup-hot' 'bi-flower1' 'bi-stars' %}"></i></span>
-                        <span>{{ category.name }}</span>
-                        <i class="bi bi-arrow-up-right category-arrow"></i>
+        <div class="row row-cols-2 row-cols-md-3 g-3 g-md-4">
+            {% for card in category_cards %}
+                <div class="col" data-reveal style="--d:{{ forloop.counter0|add:0 }}s">
+                    <a class="category-card" href="{{ card.category.get_absolute_url }}">
+                        <span class="category-media">
+                            {% if card.sample and card.sample.image %}
+                                <img src="{{ card.sample.image.url }}" alt="{{ card.category.name }}" loading="lazy" decoding="async" data-fallback>
+                            {% else %}
+                                <span class="category-icon"><i class="bi {{ card.category|category_icon }}"></i></span>
+                            {% endif %}
+                        </span>
+                        <span class="category-info">
+                            <span class="category-name">{{ card.category.name }}</span>
+                            <span class="category-count">{{ card.product_count }} product{{ card.product_count|pluralize }}</span>
+                        </span>
+                        <i class="bi bi-arrow-right category-arrow"></i>
                     </a>
                 </div>
             {% empty %}
-                <div class="col-12"><div class="empty-state py-4"><i class="bi bi-grid"></i><h3>Categories coming soon</h3><p class="mb-0">Categories will appear here as you build your collection.</p></div></div>
-            {% endfor %}
-        </div>
-    </div>
-</section>
-
-<section class="section-block tint" id="favorites">
-    <div class="container">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
-            <div>
-                <span class="eyebrow"><span class="eyebrow-line"></span>Fresh from the shelf</span>
-                <h2 class="section-title mt-2">A few <em>favorites</em></h2>
-                <p class="section-kicker">The pieces our customers re-order, gift, and write to us about.</p>
-            </div>
-            <a class="text-link text-nowrap" href="{% url 'store:product_list' %}">Shop all products <i class="bi bi-arrow-up-right"></i></a>
-        </div>
-        <div class="row g-3 g-lg-4">
-            {% for product in featured_products %}
-                <div class="col-12 col-sm-6 col-lg-3">{% include 'store/includes/product_card.html' %}</div>
-            {% empty %}
                 <div class="col-12">
                     <div class="empty-state">
-                        <i class="bi bi-box-seam"></i>
-                        <h3>No products yet</h3>
-                        <p>The store is ready for its first product. Add one from the Django Admin dashboard.</p>
-                        <a href="{% url 'store:product_list' %}" class="btn btn-brand rounded-pill px-4">Browse the shop</a>
+                        <i class="bi bi-grid-3x3-gap"></i>
+                        <h3>Categories coming soon</h3>
+                        <p>Add a category in Django Admin and it will appear here automatically.</p>
                     </div>
                 </div>
             {% endfor %}
@@ -125,16 +113,68 @@
     </div>
 </section>
 
+<section class="section-block section-tint">
+    <div class="container">
+        <div class="section-head" data-reveal>
+            <div>
+                <span class="eyebrow">Hand-picked for you</span>
+                <h2 class="section-title">Featured Products</h2>
+            </div>
+            <a class="link-arrow" href="{% url 'store:product_list' %}">Shop all<i class="bi bi-arrow-right"></i></a>
+        </div>
+        <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3 g-md-4">
+            {% for product in featured_products %}
+                <div class="col" data-reveal>{% include 'store/includes/product_card.html' %}</div>
+            {% empty %}
+                <div class="col-12">
+                    <div class="empty-state">
+                        <i class="bi bi-box-seam"></i>
+                        <h3>No products yet</h3>
+                        <p>The shelves are being stocked. Add your first product from Django Admin and it shows up here instantly.</p>
+                        <a href="{% url 'store:product_list' %}" class="btn btn-accent rounded-pill px-4">Browse the shop</a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+{% if deal_products %}
 <section class="section-block">
     <div class="container">
-        <div class="newsletter-panel row align-items-center g-4 position-relative">
-            <div class="col-lg-8 position-relative" style="z-index:1">
-                <span class="eyebrow"><span class="eyebrow-line"></span>A little less noise</span>
-                <h2 class="section-title mt-2 mb-2">Only the good stuff.</h2>
-                <p class="mb-0">Thoughtful products, new arrivals, and useful ideas — whenever they are worth sharing.</p>
+        <div class="deals-panel" data-reveal>
+            <div class="deals-head">
+                <div>
+                    <span class="eyebrow eyebrow-light"><i class="bi bi-lightning-charge-fill me-1"></i>Limited time</span>
+                    <h2 class="section-title text-white">Today's Deals</h2>
+                    <p class="deals-sub">Biggest price drops across the store — while stock lasts.</p>
+                </div>
+                <a class="btn btn-light rounded-pill px-4 fw-semibold" href="{% url 'store:deals' %}">All deals<i class="bi bi-arrow-right ms-2"></i></a>
             </div>
-            <div class="col-lg-4 text-lg-end position-relative" style="z-index:1">
-                <a href="{% url 'store:register' %}" class="btn btn-brand rounded-pill px-4">Create an account <i class="bi bi-arrow-right ms-2"></i></a>
+            <div class="row row-cols-2 row-cols-md-4 g-3 g-md-4">
+                {% for product in deal_products %}
+                    <div class="col">{% include 'store/includes/product_card.html' %}</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<section class="section-block pt-0">
+    <div class="container">
+        <div class="cta-band" data-reveal>
+            <div class="cta-band-text">
+                <h2 class="section-title">Get the best deals first.</h2>
+                <p>Create a free account to save your cart, place orders and track deliveries.</p>
+            </div>
+            <div class="cta-band-actions">
+                {% if user.is_authenticated %}
+                    <a href="{% url 'store:product_list' %}" class="btn btn-accent btn-lg rounded-pill px-4">Continue shopping<i class="bi bi-arrow-right ms-2"></i></a>
+                {% else %}
+                    <a href="{% url 'store:register' %}" class="btn btn-accent btn-lg rounded-pill px-4">Create free account<i class="bi bi-arrow-right ms-2"></i></a>
+                    <a href="{% url 'store:login' %}" class="btn btn-ghost-dark btn-lg rounded-pill px-4">Sign in</a>
+                {% endif %}
             </div>
         </div>
     </div>

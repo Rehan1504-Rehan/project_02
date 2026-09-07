@@ -1,55 +1,105 @@
 {% extends 'store/base.html' %}
-{% block title %}{% if selected_category %}{{ selected_category.name }}{% else %}Shop all{% endif %} — Northstar Store{% endblock %}
+{% load store_extras %}
+{% block title %}{% if selected_category %}{{ selected_category.name }}{% elif deals_page %}Deals{% elif query %}Search: {{ query }}{% else %}Shop all products{% endif %} — Northstar Store{% endblock %}
 {% block content %}
-<section class="page-header">
-    <div class="container py-4 py-lg-5">
-        <span class="eyebrow"><span class="eyebrow-line"></span>The collection</span>
-        <h1 class="page-title mt-2">{% if selected_category %}{{ selected_category.name }}{% elif query %}Search results{% else %}Shop <em>all</em>{% endif %}</h1>
-        {% if query %}
-            <p class="lead mb-0 mt-2">Showing {{ products|length }} result{{ products|length|pluralize }} for “{{ query }}”</p>
-        {% elif selected_category %}
-            <p class="lead mb-0 mt-2">{{ selected_category.description|default:"Useful things, carefully selected." }}</p>
-        {% else %}
-            <p class="lead mb-0 mt-2">Every product in the shop — each one picked by a human, tested at home, and worth keeping.</p>
-        {% endif %}
-        <div class="page-head-meta">
-            <span><i class="bi bi-box-seam"></i>{{ products|length }} product{{ products|length|pluralize }}</span>
-            <span><i class="bi bi-arrow-repeat"></i>30-day returns</span>
-            <span><i class="bi bi-truck"></i>Ships within 2 days</span>
-        </div>
+<section class="page-hero">
+    <div class="container" data-reveal>
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb small mb-0">
+                <li class="breadcrumb-item"><a href="{% url 'store:home' %}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'store:product_list' %}">Shop</a></li>
+                {% if selected_category %}<li class="breadcrumb-item active" aria-current="page">{{ selected_category.name }}</li>
+                {% elif deals_page %}<li class="breadcrumb-item active" aria-current="page">Deals</li>
+                {% elif query %}<li class="breadcrumb-item active" aria-current="page">Search</li>{% endif %}
+            </ol>
+        </nav>
+        <h1 class="page-hero-title">
+            {% if selected_category %}{{ selected_category.name }}
+            {% elif deals_page %}Today's Deals
+            {% elif query %}Results for “{{ query }}”
+            {% else %}Shop All Products{% endif %}
+        </h1>
+        <p class="page-hero-sub">
+            {% if query %}
+                {{ paginator.count }} result{{ paginator.count|pluralize }} matching your search
+            {% elif selected_category and selected_category.description %}
+                {{ selected_category.description }} · {{ paginator.count }} product{{ paginator.count|pluralize }}
+            {% elif deals_page %}
+                The biggest discounts across the store — while stock lasts.
+            {% else %}
+                {{ paginator.count }} product{{ paginator.count|pluralize }} · genuine items, honest prices, fast delivery
+            {% endif %}
+        </p>
     </div>
 </section>
-<section class="container section-block pt-4 pt-lg-5">
-    <div class="row g-4 g-lg-5">
-        <aside class="col-lg-3">
-            <div class="filter-card sticky-lg-top">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="filter-title">Filter by category</h2>
-                    <a href="{% url 'store:product_list' %}" class="small fw-semibold text-decoration-none">Clear</a>
+
+<section class="container section-block pt-4">
+    <div class="row g-4">
+        <aside class="col-lg-3 d-none d-lg-block">
+            <div class="sidebar-sticky">{% include 'store/includes/filters.html' with form_id='filterFormDesktop' %}</div>
+        </aside>
+
+        <div class="col-lg-9">
+            <div class="shop-toolbar" data-reveal>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-ghost-dark btn-sm rounded-pill d-lg-none filter-open" type="button" data-bs-toggle="offcanvas" data-bs-target="#filterDrawer" aria-controls="filterDrawer">
+                        <i class="bi bi-funnel me-1"></i>Filters
+                    </button>
+                    <span class="toolbar-count d-none d-sm-inline">{{ paginator.count }} item{{ paginator.count|pluralize }}</span>
                 </div>
-                <div class="list-group list-group-flush">
-                    <a href="{% url 'store:product_list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {% if not selected_category %}active-filter{% endif %}"><span>All products</span>{% if not selected_category %}<i class="bi bi-check2"></i>{% endif %}</a>
-                    {% for category in categories %}
-                        <a href="{{ category.get_absolute_url }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {% if selected_category.id == category.id %}active-filter{% endif %}"><span>{{ category.name }}</span>{% if selected_category.id == category.id %}<i class="bi bi-check2"></i>{% endif %}</a>
+                <form method="get" class="sort-form">
+                    {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+                    {% if min_price %}<input type="hidden" name="min_price" value="{{ min_price }}">{% endif %}
+                    {% if max_price %}<input type="hidden" name="max_price" value="{{ max_price }}">{% endif %}
+                    {% if on_sale %}<input type="hidden" name="sale" value="1">{% endif %}
+                    {% if stock_filter == 'all' %}<input type="hidden" name="stock" value="all">{% endif %}
+                    <label class="visually-hidden" for="sortSelect">Sort products</label>
+                    <select id="sortSelect" name="sort" class="form-select sort-select" onchange="this.form.submit()">
+                        {% for value, label in sort_options %}
+                            <option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+
+            {% if min_price or max_price or on_sale or stock_filter == 'all' %}
+                <div class="active-filters">
+                    {% if min_price or max_price %}
+                        <span class="active-filter-chip"><i class="bi bi-tag me-1"></i>
+                            {% if min_price %}₹{{ min_price }}{% else %}₹0{% endif %} – {% if max_price %}₹{{ max_price }}{% else %}any{% endif %}
+                        </span>
+                    {% endif %}
+                    {% if on_sale %}<span class="active-filter-chip"><i class="bi bi-lightning-charge me-1"></i>On sale</span>{% endif %}
+                    {% if stock_filter == 'all' %}<span class="active-filter-chip"><i class="bi bi-boxes me-1"></i>Including sold out</span>{% endif %}
+                </div>
+            {% endif %}
+
+            {% if products %}
+                <div class="row row-cols-2 row-cols-md-3 g-3 g-md-4">
+                    {% for product in products %}
+                        <div class="col" data-reveal>{% include 'store/includes/product_card.html' %}</div>
                     {% endfor %}
                 </div>
-                <div class="filter-count mt-3"><i class="bi bi-bag me-1"></i>{{ products|length }} item{{ products|length|pluralize }}</div>
-            </div>
-        </aside>
-        <div class="col-lg-9">
-            {% if products %}
-                <div class="row g-3 g-lg-4">
-                    {% for product in products %}<div class="col-12 col-sm-6 col-xl-4">{% include 'store/includes/product_card.html' %}</div>{% endfor %}
-                </div>
+                {% include 'store/includes/pagination.html' %}
             {% else %}
-                <div class="empty-state large-empty">
+                <div class="empty-state large-empty" data-reveal>
                     <i class="bi bi-search"></i>
-                    <h2>Nothing matched</h2>
-                    <p>Try a different search term, or clear the filters to see the whole collection again.</p>
-                    <a class="btn btn-brand rounded-pill px-4" href="{% url 'store:product_list' %}"><i class="bi bi-arrow-left me-2"></i>View all products</a>
+                    <h2>{% if query %}No products found for “{{ query }}”{% else %}No products match these filters{% endif %}</h2>
+                    <p>{% if query %}Check the spelling or try a more general keyword.{% else %}Try widening the price range or clearing a filter or two.{% endif %}</p>
+                    <a class="btn btn-accent rounded-pill px-4" href="{% url 'store:product_list' %}"><i class="bi bi-arrow-left me-2"></i>View all products</a>
                 </div>
             {% endif %}
         </div>
     </div>
 </section>
+
+<div class="offcanvas offcanvas-start filter-drawer" tabindex="-1" id="filterDrawer" aria-labelledby="filterDrawerLabel">
+    <div class="offcanvas-header mobile-menu-head">
+        <h2 class="filter-drawer-title" id="filterDrawerLabel"><i class="bi bi-funnel me-2"></i>Filters</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        {% include 'store/includes/filters.html' with form_id='filterFormMobile' %}
+    </div>
+</div>
 {% endblock %}

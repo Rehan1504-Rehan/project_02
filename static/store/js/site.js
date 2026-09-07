@@ -1,19 +1,36 @@
+/* Northstar Store — storefront interactions (vanilla JS, no libraries). */
 document.addEventListener("DOMContentLoaded", () => {
-    // Respect reduced-motion: settle the hero art, stamp, and ticker.
-    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        const hero = document.querySelector(".hero-section");
-        if (hero) hero.classList.add("hero-no-motion");
-    }
+    const reduceMotion =
+        window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // Elevate the navbar once the page scrolls a little.
-    const nav = document.querySelector(".main-nav");
-    if (nav) {
-        const onScroll = () => nav.classList.toggle("is-scrolled", window.scrollY > 8);
+    // --- Header shadow once the page scrolls a little ---------------------
+    const header = document.querySelector(".site-header");
+    if (header) {
+        const onScroll = () => header.classList.toggle("is-scrolled", window.scrollY > 10);
         onScroll();
         window.addEventListener("scroll", onScroll, { passive: true });
     }
 
-    // Quantity steppers used on product detail pages.
+    // --- Scroll-in reveal animations ---------------------------------------
+    const revealEls = document.querySelectorAll("[data-reveal]");
+    if (reduceMotion || !("IntersectionObserver" in window)) {
+        revealEls.forEach((el) => el.classList.add("in"));
+    } else {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add("in");
+                        observer.unobserve(entry.target);
+                    }
+                });
+            },
+            { threshold: 0.12, rootMargin: "0px 0px -34px 0px" }
+        );
+        revealEls.forEach((el) => observer.observe(el));
+    }
+
+    // --- Quantity steppers (product detail) --------------------------------
     document.querySelectorAll("[data-quantity-action]").forEach((button) => {
         button.addEventListener("click", () => {
             const control = button.closest(".quantity-control");
@@ -27,11 +44,82 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // Give temporary alerts a gentle close without hiding them from screen readers.
+    // --- Product image zoom (detail page) -----------------------------------
+    const zoomWrap = document.getElementById("pdZoom");
+    const zoomImage = document.getElementById("pdImage");
+    if (zoomWrap && zoomImage) {
+        if (window.matchMedia && window.matchMedia("(pointer: fine)").matches) {
+            zoomWrap.addEventListener("pointermove", (event) => {
+                const rect = zoomWrap.getBoundingClientRect();
+                const x = ((event.clientX - rect.left) / rect.width) * 100;
+                const y = ((event.clientY - rect.top) / rect.height) * 100;
+                zoomImage.style.transformOrigin = `${x}% ${y}%`;
+                zoomWrap.classList.add("zoomed");
+            });
+            zoomWrap.addEventListener("pointerleave", () => {
+                zoomWrap.classList.remove("zoomed");
+                zoomImage.style.transformOrigin = "center center";
+            });
+        } else {
+            // Touch devices: tap to toggle the zoom instead of hover.
+            zoomWrap.addEventListener("click", () => {
+                zoomWrap.classList.toggle("zoomed");
+            });
+        }
+    }
+
+    // --- Show / hide password buttons ---------------------------------------
+    document.querySelectorAll("[data-password-toggle]").forEach((button) => {
+        button.addEventListener("click", () => {
+            const input = document.getElementById(button.dataset.passwordToggle);
+            if (!input) return;
+            const showing = input.type === "text";
+            input.type = showing ? "password" : "text";
+            button.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+            const icon = button.querySelector("i");
+            if (icon) {
+                icon.className = showing ? "bi bi-eye" : "bi bi-eye-slash";
+            }
+        });
+    });
+
+    // --- Broken image safety net --------------------------------------------
+    // Any storefront image that fails to load becomes a tidy placeholder
+    // instead of a broken-image icon.
+    const swapToPlaceholder = (img) => {
+        const holder = document.createElement("div");
+        holder.className = "placeholder-image";
+        holder.innerHTML = '<i class="bi bi-image"></i><span>No image available</span>';
+        img.replaceWith(holder);
+    };
+    document.querySelectorAll("img[data-fallback]").forEach((img) => {
+        if (img.complete && img.naturalWidth === 0 && img.src) {
+            swapToPlaceholder(img);
+        } else {
+            img.addEventListener("error", () => swapToPlaceholder(img), { once: true });
+        }
+    });
+
+    // --- Submit feedback on key buttons (prevents double submits) -----------
+    document.querySelectorAll("form").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+            const submitter = event.submitter;
+            if (!submitter || submitter.type !== "submit" || submitter.dataset.noLoading) return;
+            if (submitter.classList.contains("quantity-button")) return;
+            submitter.classList.add("is-loading");
+            submitter.style.pointerEvents = "none";
+            window.setTimeout(() => {
+                submitter.classList.remove("is-loading");
+                submitter.style.pointerEvents = "";
+            }, 4000);
+        });
+    });
+
+    // --- Give temporary alerts a gentle auto close ---------------------------
     window.setTimeout(() => {
         document.querySelectorAll(".alert-dismissible").forEach((alert) => {
             if (window.bootstrap) {
-                bootstrap.Alert.getOrCreateInstance(alert).close();
+                window.bootstrap.Alert.getOrCreateInstance(alert).close();
             }
         });
     }, 6500);

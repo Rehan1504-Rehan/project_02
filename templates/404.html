@@ -3,11 +3,11 @@
 {% block content %}
 <section class="error-page container">
     <span class="error-code">404</span>
-    <h1>We lost that page.</h1>
-    <p class="lead">The link may be old, or the page may have moved to a better shelf.</p>
+    <h1>This page went out of stock.</h1>
+    <p class="error-copy">The link may be old, or the page may have moved. Let's get you back to the good stuff.</p>
     <div class="d-flex justify-content-center gap-3 flex-wrap mt-4">
-        <a class="btn btn-brand rounded-pill px-4" href="{% url 'store:home' %}"><i class="bi bi-house me-2"></i>Back to home</a>
-        <a class="btn btn-outline-dark rounded-pill px-4" href="{% url 'store:product_list' %}">Browse the shop</a>
+        <a class="btn btn-accent rounded-pill px-4" href="{% url 'store:home' %}"><i class="bi bi-house me-2"></i>Back to home</a>
+        <a class="btn btn-ghost-dark rounded-pill px-4" href="{% url 'store:product_list' %}">Browse the shop</a>
     </div>
 </section>
 {% endblock %}
