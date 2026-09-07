@@ -1,7 +1,7 @@
 {% load store_extras %}
 <header class="site-header" id="siteHeader">
     <div class="container header-main">
-        <button class="header-icon-btn header-menu-btn d-lg-none" type="button" data-nav-open aria-controls="navDrawer" aria-expanded="false" aria-label="Open menu">
+        <button class="header-icon-btn header-menu-btn" type="button" data-nav-open aria-controls="navDrawer" aria-expanded="false" aria-label="Open menu">
             <i class="bi bi-list" aria-hidden="true"></i>
         </button>
 
@@ -62,47 +62,7 @@
         </div>
     </div>
 
-    <nav class="header-nav d-none d-lg-block" aria-label="Primary">
-        <div class="container">
-            <ul class="header-nav-list">
-                <li><a class="nav-pill{% if request.resolver_match.url_name == 'home' %} active{% endif %}" href="{% url 'store:home' %}">Home</a></li>
-                <li><a class="nav-pill{% if request.resolver_match.url_name == 'product_list' %} active{% endif %}" href="{% url 'store:product_list' %}">Shop</a></li>
-                <li class="dropdown">
-                    <button class="nav-pill nav-pill-btn{% if request.resolver_match.url_name == 'category_products' %} active{% endif %} dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Categories
-                    </button>
-                    <ul class="dropdown-menu shadow category-menu">
-                        <li>
-                            <a class="dropdown-item" href="{% url 'store:product_list' %}">
-                                <i class="bi bi-grid-3x3-gap me-2 text-accent"></i>All products
-                            </a>
-                        </li>
-                        {% for category in nav_categories %}
-                            <li>
-                                <a class="dropdown-item" href="{{ category.get_absolute_url }}">
-                                    <i class="bi {{ category|category_icon }} me-2 text-accent"></i>{{ category.name }}
-                                </a>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                </li>
-                {% for category in nav_categories %}
-                    {% with lname=category.name|lower %}
-                        {% if 'electronic' in lname or 'electronic' in category.slug %}
-                            <li><a class="nav-pill{% if request.resolver_match.url_name == 'category_products' and request.resolver_match.kwargs.slug == category.slug %} active{% endif %}" href="{{ category.get_absolute_url }}">{{ category.name }}</a></li>
-                        {% elif 'gaming' in lname or 'game' in category.slug %}
-                            <li><a class="nav-pill{% if request.resolver_match.url_name == 'category_products' and request.resolver_match.kwargs.slug == category.slug %} active{% endif %}" href="{{ category.get_absolute_url }}">{{ category.name }}</a></li>
-                        {% endif %}
-                    {% endwith %}
-                {% endfor %}
-                <li>
-                    <a class="nav-pill nav-pill-deal{% if request.resolver_match.url_name == 'deals' %} active{% endif %}" href="{% url 'store:deals' %}">
-                        <i class="bi bi-lightning-charge-fill me-1"></i>Deals
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </nav>
+
 </header>
 
 <div class="nav-overlay" id="navOverlay" data-nav-close></div>
@@ -139,6 +99,12 @@
                     <i class="bi bi-chevron-right drawer-chevron" aria-hidden="true"></i>
                 </button>
                 <ul class="drawer-sub" id="navCategories"{% if request.resolver_match.url_name != 'category_products' %} hidden{% endif %}>
+                    <li>
+                        <a class="drawer-sublink{% if request.resolver_match.url_name == 'product_list' and not request.GET.q %} is-active{% endif %}" href="{% url 'store:product_list' %}">
+                            <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
+                            <span>All Products</span>
+                        </a>
+                    </li>
                     {% for category in nav_categories %}
                         <li>
                             <a class="drawer-sublink{% if request.resolver_match.url_name == 'category_products' and request.resolver_match.kwargs.slug == category.slug %} is-active{% endif %}" href="{{ category.get_absolute_url }}">
@@ -151,30 +117,7 @@
                     {% endfor %}
                 </ul>
             </li>
-            {% for category in nav_categories %}
-                {% with lname=category.name|lower %}
-                    {% if 'electronic' in lname or 'electronic' in category.slug %}
-                        <li>
-                            <a class="drawer-link{% if request.resolver_match.url_name == 'category_products' and request.resolver_match.kwargs.slug == category.slug %} is-active{% endif %}" href="{{ category.get_absolute_url }}">
-                                <i class="bi bi-cpu" aria-hidden="true"></i>
-                                <span>{{ category.name }}</span>
-                            </a>
-                        </li>
-                    {% endif %}
-                {% endwith %}
-            {% endfor %}
-            {% for category in nav_categories %}
-                {% with lname=category.name|lower %}
-                    {% if 'gaming' in lname or 'game' in category.slug %}
-                        <li>
-                            <a class="drawer-link{% if request.resolver_match.url_name == 'category_products' and request.resolver_match.kwargs.slug == category.slug %} is-active{% endif %}" href="{{ category.get_absolute_url }}">
-                                <i class="bi bi-controller" aria-hidden="true"></i>
-                                <span>{{ category.name }}</span>
-                            </a>
-                        </li>
-                    {% endif %}
-                {% endwith %}
-            {% endfor %}
+
             <li>
                 <a class="drawer-link drawer-deal{% if request.resolver_match.url_name == 'deals' %} is-active{% endif %}" href="{% url 'store:deals' %}">
                     <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i>
