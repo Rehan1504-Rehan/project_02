@@ -226,7 +226,8 @@ In Admin, open **Products** to change prices, discount prices, descriptions, cat
 | `ADMIN_PASSWORD` | empty in Git | Private Railway variable; use a strong password. |
 | `ADMIN_EMAIL` | `admin@example.com` | Private Railway variable. |
 | `SECURE_SSL_REDIRECT` | `False` locally | Set `True` only when HTTPS proxy configuration is ready. |
-| `MEDIA_ROOT` | default `media/` | Optional persistent mount such as `/app/media`. |
+| `MEDIA_ROOT` | default `media/` | Optional persistent mount such as `/data/media` (Render Persistent Disk) or `/app/media` (Railway Volume). |
+| `SERVE_MEDIA` | `True` | Media is served automatically by Django. Set `False` when using external cloud object storage. |
 
 Django will use SQLite when `DATABASE_URL` is empty. When `DATABASE_URL` is set, `dj-database-url` configures the database, including Railway's PostgreSQL URL.
 
@@ -301,9 +302,12 @@ In the Railway web service, open **Settings** → **Networking** → **Generate 
 
 - WhiteNoise serves files collected into `staticfiles/`; the Procfile starts Gunicorn with the correct WSGI module.
 - `python manage.py collectstatic --noinput` is safe to run during deployment.
-- Product uploads go to `MEDIA_ROOT` and are served by Django only in local `DEBUG=True` mode.
-- Railway container filesystems are not a permanent media store. For a small deployment, attach a Railway Volume mounted at `/app/media` and add `MEDIA_ROOT=/app/media` plus `SERVE_MEDIA=True` to the web service variables. The app then serves that volume at `/media/`; back up the volume.
-- For a multi-instance or higher-traffic shop, use an S3-compatible object store (Amazon S3, Cloudflare R2, or similar) and add a dedicated Django storage backend such as `django-storages`. Configure that backend and its bucket credentials as private Railway variables; never place cloud keys in this repository. Static files can continue to use WhiteNoise.
+- Product uploads go to `MEDIA_ROOT` and are served by Django at `/media/` in development and production (`SERVE_MEDIA` defaults to `True`).
+- Cloud host container filesystems (e.g. Render, Railway) are ephemeral and not a permanent media store across redeploys.
+  - **Render**: Attach a Persistent Disk mounted at `/data/media` and add `MEDIA_ROOT=/data/media` to the service environment variables.
+  - **Railway**: Attach a Volume mounted at `/app/media` and add `MEDIA_ROOT=/app/media` to the service environment variables.
+  - The application automatically serves the mounted disk/volume at `/media/`.
+- For a multi-instance or higher-traffic shop, use an S3-compatible object store (Amazon S3, Cloudflare R2, or similar) and add a dedicated Django storage backend such as `django-storages`. Configure that backend and its bucket credentials as private service variables; never place cloud keys in this repository. Static files can continue to use WhiteNoise.
 
 ## Database and price behavior
 
@@ -360,7 +364,7 @@ Confirm PostgreSQL is linked to the web service and that `DATABASE_URL` appears 
 
 ### Images disappear after a redeploy
 
-That is expected for ephemeral container storage. Attach a Railway Volume at `/app/media` and set `MEDIA_ROOT=/app/media`, or configure S3-compatible object storage as described above.
+That is expected for ephemeral container storage. On Render, attach a Persistent Disk at `/data/media` and set `MEDIA_ROOT=/data/media`. On Railway, attach a Volume at `/app/media` and set `MEDIA_ROOT=/app/media`. Alternatively, configure S3-compatible object storage as described above.
 
 ### Static assets are missing
 

@@ -1,10 +1,12 @@
 import os
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import CartItem, Category, Order, OrderItem, Product
@@ -125,6 +127,19 @@ class StoreFlowTests(TestCase):
         self.client.force_login(other_user)
         response = self.client.get(order.get_absolute_url())
         self.assertEqual(response.status_code, 404)
+
+    def test_media_served_with_debug_false(self):
+        media_file = settings.MEDIA_ROOT / "test_image.png"
+        settings.MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+        media_file.write_bytes(b"dummy-image-data")
+        try:
+            with override_settings(DEBUG=False, SERVE_MEDIA=True):
+                response = self.client.get("/media/test_image.png")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(b"".join(response.streaming_content), b"dummy-image-data")
+        finally:
+            if media_file.exists():
+                media_file.unlink()
 
 
 class AdminSetupCommandTests(TestCase):

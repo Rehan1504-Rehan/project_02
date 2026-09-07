@@ -111,16 +111,17 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-MEDIA_URL = "media/"
+MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "media")))
-# Set SERVE_MEDIA=True when a Railway Volume is mounted at MEDIA_ROOT. For a
-# larger deployment, use object storage instead of serving uploads through Django.
-SERVE_MEDIA = env_bool("SERVE_MEDIA", DEBUG)
+# Set SERVE_MEDIA=True to serve media uploads directly with Django. This is
+# useful when a Render Persistent Disk or Railway Volume is mounted at MEDIA_ROOT.
+# For larger deployments, use object storage (e.g. S3/R2) instead.
+SERVE_MEDIA = env_bool("SERVE_MEDIA", True)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
