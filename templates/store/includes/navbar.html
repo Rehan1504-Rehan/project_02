@@ -63,7 +63,25 @@
         </div>
     </div>
 
-
+    <nav class="header-nav d-none d-lg-block" aria-label="Product categories">
+        <div class="container">
+            <ul class="header-nav-list">
+                <li>
+                    <a class="nav-pill{% if request.resolver_match.url_name == 'product_list' %} active{% endif %}" href="{% url 'store:product_list' %}">All Products</a>
+                </li>
+                {% for category in nav_categories %}
+                    <li>
+                        <a class="nav-pill{% if request.resolver_match.url_name == 'category_products' and request.resolver_match.kwargs.slug == category.slug %} active{% endif %}" href="{{ category.get_absolute_url }}">{{ category.name }}</a>
+                    </li>
+                {% endfor %}
+                {% if deals_available %}
+                    <li>
+                        <a class="nav-pill nav-pill-deal{% if request.resolver_match.url_name == 'deals' %} active{% endif %}" href="{% url 'store:deals' %}">Deals</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </div>
+    </nav>
 </header>
 
 <div class="nav-overlay" id="navOverlay" data-nav-close></div>

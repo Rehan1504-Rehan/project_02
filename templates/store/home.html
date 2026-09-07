@@ -161,6 +161,25 @@
 </section>
 {% endif %}
 
+{% for section in category_sections %}
+<section class="section-block{% if forloop.counter|divisibleby:2 %} section-tint{% endif %}" id="category-{{ section.category.slug }}">
+    <div class="container">
+        <div class="section-head" data-reveal>
+            <div>
+                <span class="eyebrow"><i class="bi {{ section.category|category_icon }} me-1"></i>{{ section.product_count }} product{{ section.product_count|pluralize }}</span>
+                <h2 class="section-title">{{ section.category.name }}</h2>
+            </div>
+            <a class="link-arrow" href="{{ section.category.get_absolute_url }}">View all {{ section.category.name }}<i class="bi bi-arrow-right"></i></a>
+        </div>
+        <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3 g-md-4">
+            {% for product in section.products %}
+                <div class="col" data-reveal>{% include 'store/includes/product_card.html' %}</div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endfor %}
+
 <section class="section-block pt-0">
     <div class="container">
         <div class="cta-band" data-reveal>

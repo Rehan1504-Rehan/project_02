@@ -95,6 +95,48 @@ class StoreFlowTests(TestCase):
         self.assertContains(response, reverse("store:cart"))
         self.assertContains(response, reverse("store:login"))
 
+    def test_home_and_nav_include_a_section_for_every_stocked_category(self):
+        """All Products, Electronics and Gaming are not special-cased.
+
+        Every category that has in-stock products gets the same homepage
+        shelf, desktop nav pill and footer link.
+        """
+        gaming = Category.objects.create(name="Gaming", description="Games and consoles")
+        fashion = Category.objects.create(name="Fashion", description="Everyday wear")
+        Category.objects.create(name="Empty Aisle", description="Nothing here yet")
+        Product.objects.create(
+            name="Arcade Pad",
+            description="A wired game controller.",
+            price=Decimal("20.00"),
+            category=gaming,
+            stock_quantity=2,
+            available=True,
+        )
+        Product.objects.create(
+            name="Canvas Tee",
+            description="A soft cotton t-shirt.",
+            price=Decimal("18.00"),
+            category=fashion,
+            stock_quantity=4,
+            available=True,
+        )
+        response = self.client.get(reverse("store:home"))
+        self.assertContains(response, 'id="category-electronics"')
+        self.assertContains(response, 'id="category-gaming"')
+        self.assertContains(response, 'id="category-fashion"')
+        self.assertContains(response, "Desk Light")
+        self.assertContains(response, "Arcade Pad")
+        self.assertContains(response, "Canvas Tee")
+        self.assertContains(response, "View all Electronics")
+        self.assertContains(response, "View all Gaming")
+        self.assertContains(response, "View all Fashion")
+        self.assertContains(response, self.category.get_absolute_url())
+        self.assertContains(response, gaming.get_absolute_url())
+        self.assertContains(response, fashion.get_absolute_url())
+        self.assertNotContains(response, "Empty Aisle")
+        self.assertContains(response, "header-nav")
+        self.assertContains(response, "All Products")
+
     def test_search_and_category_filter(self):
         other = Product.objects.create(
             name="Canvas Shoes",
