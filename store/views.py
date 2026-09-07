@@ -1,18 +1,23 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import SuspiciousFileOperation
 from django.db import transaction
 from django.db.models import Q
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.static import serve as static_serve
+from django.utils.cache import get_conditional_response
+from django.utils.http import http_date, url_has_allowed_host_and_scheme
 
 from .forms import CheckoutForm, LoginForm, RegistrationForm
-from .models import Cart, CartItem, Category, Order, OrderItem, Product
+from .models import Cart, CartItem, Category, MediaFile, Order, OrderItem, Product
+from .storage import normalize_name
 
 
 class OutOfStockError(Exception):
@@ -324,6 +329,51 @@ def order_detail(request: HttpRequest, order_number: str) -> HttpResponse:
         user=request.user,
     )
     return render(request, "store/order_detail.html", {"order": order})
+
+
+@require_http_methods(["GET", "HEAD"])
+def serve_media(request: HttpRequest, path: str) -> HttpResponse:
+    """Serve an uploaded file at ``/media/<path>``.
+
+    Uploads live in the database (see ``store.storage.DatabaseStorage``) so they
+    survive the ephemeral container filesystems used by Render and similar
+    hosts. Files that predate that change - or that were written to disk in
+    local development - are still served from ``MEDIA_ROOT`` as a fallback.
+    """
+    try:
+        name = normalize_name(path)
+    except SuspiciousFileOperation:
+        raise Http404("Invalid media path.")
+
+    record = MediaFile.objects.filter(name=name).first()
+    if record is None:
+        return _serve_media_from_disk(request, name)
+
+    etag = f'"{record.checksum}"' if record.checksum else None
+    last_modified = int(record.updated_at.timestamp())
+    conditional = get_conditional_response(request, etag=etag, last_modified=last_modified)
+    if conditional is not None:
+        return conditional
+
+    response = HttpResponse(
+        record.data, content_type=record.content_type or "application/octet-stream"
+    )
+    response["Content-Length"] = str(record.size)
+    response["Last-Modified"] = http_date(last_modified)
+    if etag:
+        response["ETag"] = etag
+    # Uploads get a fresh, unique name, so they can be cached for a while; the
+    # ETag still lets browsers revalidate cheaply once the max-age expires.
+    response["Cache-Control"] = f"public, max-age={settings.MEDIA_CACHE_SECONDS}"
+    return response
+
+
+def _serve_media_from_disk(request: HttpRequest, name: str) -> HttpResponse:
+    """Fallback for legacy files that were saved to ``MEDIA_ROOT``."""
+    try:
+        return static_serve(request, name, document_root=settings.MEDIA_ROOT)
+    except (SuspiciousFileOperation, ValueError):
+        raise Http404("Invalid media path.")
 
 
 # These handlers are referenced by ecommerce.urls and keep production errors

@@ -114,16 +114,54 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "media")))
-# Set SERVE_MEDIA=True to serve media uploads directly with Django. This is
-# useful when a Render Persistent Disk or Railway Volume is mounted at MEDIA_ROOT.
-# For larger deployments, use object storage (e.g. S3/R2) instead.
+
+# Where uploaded product images are kept.
+#   "database"   - (default) bytes are stored in the database next to the
+#                  products. Cloud container filesystems are wiped on every
+#                  deploy and restart, so anything written to MEDIA_ROOT is
+#                  lost; the database is the one place that already persists.
+#   "filesystem" - classic MEDIA_ROOT storage. Only choose this when MEDIA_ROOT
+#                  points at a real persistent disk/volume mount.
+MEDIA_STORAGE = os.getenv("MEDIA_STORAGE", "database").strip().lower()
+if MEDIA_STORAGE not in {"database", "filesystem"}:
+    raise ImproperlyConfigured("MEDIA_STORAGE must be either 'database' or 'filesystem'.")
+
+_DEFAULT_FILE_BACKEND = (
+    "store.storage.DatabaseStorage"
+    if MEDIA_STORAGE == "database"
+    else "django.core.files.storage.FileSystemStorage"
+)
+
+# Django 5.1 removed DEFAULT_FILE_STORAGE/STATICFILES_STORAGE in favour of the
+# STORAGES dict, so the old settings were being ignored. Both aliases must be
+# listed here: this dict replaces the defaults instead of merging with them.
+# The staticfiles backend compresses collected assets without hashing their
+# names, so a deployment that skips `collectstatic` degrades gracefully rather
+# than raising "Missing staticfiles manifest entry" on every page.
+STORAGES = {
+    "default": {"BACKEND": _DEFAULT_FILE_BACKEND},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
+
+# Set SERVE_MEDIA=False only when an external CDN/object store answers
+# /media/ directly. Otherwise Django serves uploads itself, reading them from
+# the database (or MEDIA_ROOT when MEDIA_STORAGE=filesystem).
 SERVE_MEDIA = env_bool("SERVE_MEDIA", True)
+# How long browsers may cache an uploaded image before revalidating (ETag).
+MEDIA_CACHE_SECONDS = int(os.getenv("MEDIA_CACHE_SECONDS", "3600"))
+# Uploads are held in memory and stored in a database row, so cap their size.
+MAX_IMAGE_UPLOAD_MB = float(os.getenv("MAX_IMAGE_UPLOAD_MB", "5"))
+MAX_IMAGE_UPLOAD_BYTES = int(MAX_IMAGE_UPLOAD_MB * 1024 * 1024)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Apply pending migrations when the web server boots, so a deployment whose
+# build step does not run `manage.py migrate` still works. See
+# ecommerce/startup.py. Set False if migrations are handled by the platform.
+RUN_STARTUP_TASKS = env_bool("RUN_STARTUP_TASKS", True)
 
 LOGIN_URL = "store:login"
 LOGIN_REDIRECT_URL = "store:home"

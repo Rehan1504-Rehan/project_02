@@ -1,9 +1,11 @@
+from django import forms
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BuiltInUserAdmin
 from django.utils.html import format_html
 
-from .models import Cart, CartItem, Category, Order, OrderItem, Product
+from .models import Cart, CartItem, Category, MediaFile, Order, OrderItem, Product
 
 
 class StockStatusFilter(admin.SimpleListFilter):
@@ -32,8 +34,32 @@ class CategoryAdmin(admin.ModelAdmin):
         return obj.products.count()
 
 
+class ProductAdminForm(forms.ModelForm):
+    """Adds an upload size guard to the product form."""
+
+    class Meta:
+        model = Product
+        fields = "__all__"
+
+    def clean_image(self):
+        image = self.cleaned_data.get("image")
+        # Only a freshly uploaded file has a size to check; an unchanged field
+        # returns the existing stored file.
+        size = getattr(image, "size", None)
+        if size and size > settings.MAX_IMAGE_UPLOAD_BYTES:
+            raise forms.ValidationError(
+                "This image is %(actual).1f MB. Please upload a file of %(limit).0f MB or less."
+                % {
+                    "actual": size / (1024 * 1024),
+                    "limit": settings.MAX_IMAGE_UPLOAD_MB,
+                }
+            )
+        return image
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
+    form = ProductAdminForm
     list_display = (
         "image_preview",
         "name",
@@ -61,13 +87,54 @@ class ProductAdmin(admin.ModelAdmin):
 
     @admin.display(description="Image")
     def image_preview(self, obj):
-        if obj.image:
+        if not obj.image:
+            return format_html('<span style="color:#9ca3af;">No image</span>')
+        # A row can still point at a file that is gone (for example an upload
+        # made before media moved into the database, which the host wiped on
+        # the next deploy). Say so plainly instead of showing a broken image.
+        try:
+            missing = not obj.image.storage.exists(obj.image.name)
+        except Exception:  # pragma: no cover - never block the changelist
+            missing = False
+        if missing:
             return format_html(
-                '<img src="{}" alt="{}" style="height:48px;width:48px;object-fit:cover;border-radius:8px;" />',
-                obj.image.url,
-                obj.name,
+                '<span style="color:#b91c1c;" title="{}">Missing file — re-upload</span>',
+                obj.image.name,
             )
-        return format_html('<span style="color:#9ca3af;">No image</span>')
+        return format_html(
+            '<img src="{}" alt="{}" style="height:48px;width:48px;object-fit:cover;border-radius:8px;" />',
+            obj.image.url,
+            obj.name,
+        )
+
+
+@admin.register(MediaFile)
+class MediaFileAdmin(admin.ModelAdmin):
+    """Read-only view of the uploads stored in the database."""
+
+    list_display = ("name", "preview", "content_type", "size_display", "updated_at")
+    search_fields = ("name", "content_type")
+    list_filter = ("content_type", "updated_at")
+    readonly_fields = ("name", "preview", "content_type", "size_display", "checksum", "created_at", "updated_at")
+    fields = readonly_fields
+    ordering = ("-updated_at",)
+
+    def has_add_permission(self, request):
+        # Files arrive through product uploads, never by hand.
+        return False
+
+    @admin.display(description="Preview")
+    def preview(self, obj):
+        if obj.content_type.startswith("image/"):
+            return format_html(
+                '<img src="{}" style="height:48px;width:48px;object-fit:cover;border-radius:8px;" />',
+                f"{settings.MEDIA_URL}{obj.name}",
+            )
+        return "—"
+
+    @admin.display(description="Size", ordering="size")
+    def size_display(self, obj):
+        return f"{obj.size / 1024:.1f} KB"
 
 
 class OrderItemInline(admin.TabularInline):
