@@ -1,0 +1,3 @@
+{% extends 'store/base.html' %}
+{% block title %}Page not found — Northstar Store{% endblock %}
+{% block content %}<section class="error-page container py-5 text-center"><span class="error-code">404</span><h1>We lost that page.</h1><p class="text-muted">The link may be old, or the page may have moved.</p><a class="btn btn-dark rounded-pill" href="{% url 'store:home' %}">Back to home</a></section>{% endblock %}

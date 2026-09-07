@@ -1,0 +1,3 @@
+{% extends 'store/base.html' %}
+{% block title %}Something went wrong — Northstar Store{% endblock %}
+{% block content %}<section class="error-page container py-5 text-center"><span class="error-code">500</span><h1>A small detour.</h1><p class="text-muted">Something went wrong on our side. Please try again in a moment.</p><a class="btn btn-dark rounded-pill" href="{% url 'store:home' %}">Back to home</a></section>{% endblock %}

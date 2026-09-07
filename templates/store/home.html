@@ -1,0 +1,78 @@
+{% extends 'store/base.html' %}
+{% block title %}Northstar Store — Better everyday goods{% endblock %}
+{% block content %}
+<section class="hero-section">
+    <div class="container py-5 py-lg-6">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <span class="eyebrow"><span class="eyebrow-line"></span> Curated for your everyday</span>
+                <h1 class="display-title mt-3">Good things,<br><em>well chosen.</em></h1>
+                <p class="hero-copy mt-4">Discover useful, beautiful products that earn their place in your home. No noise, just the things worth keeping.</p>
+                <div class="d-flex flex-wrap gap-3 mt-4">
+                    <a class="btn btn-dark btn-lg rounded-pill px-4" href="{% url 'store:product_list' %}">Explore the collection <i class="bi bi-arrow-up-right ms-2"></i></a>
+                    <a class="btn btn-outline-dark btn-lg rounded-pill px-4" href="#categories">Browse categories</a>
+                </div>
+                <div class="hero-proof d-flex flex-wrap gap-4 mt-5">
+                    <span><i class="bi bi-shield-check"></i> Secure checkout</span>
+                    <span><i class="bi bi-box-seam"></i> Packed with care</span>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="hero-art position-relative">
+                    <div class="hero-sun"></div>
+                    <div class="hero-card hero-card-back"></div>
+                    <div class="hero-card hero-card-main">
+                        <div class="hero-card-label">The edit / 01</div>
+                        <div class="hero-product-shape"><i class="bi bi-stars"></i></div>
+                        <div class="hero-card-name">Objects with<br>purpose.</div>
+                        <div class="hero-card-footer"><span>northstar</span><span><i class="bi bi-arrow-up-right"></i></span></div>
+                    </div>
+                    <span class="hero-float hero-float-one"><i class="bi bi-heart"></i></span>
+                    <span class="hero-float hero-float-two">✦</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="container py-5" id="categories">
+    <div class="section-heading d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+        <div><span class="eyebrow">Start somewhere</span><h2 class="section-title mt-2">Shop by mood</h2></div>
+        <a class="text-link" href="{% url 'store:product_list' %}">See everything <i class="bi bi-arrow-up-right"></i></a>
+    </div>
+    <div class="row g-3">
+        {% for category in categories %}
+            <div class="col-6 col-md-3">
+                <a class="category-tile" href="{{ category.get_absolute_url }}">
+                    <span class="category-icon"><i class="bi {% cycle 'bi-phone' 'bi-laptop' 'bi-lightning-charge' 'bi-stars' %}"></i></span>
+                    <span>{{ category.name }}</span>
+                    <i class="bi bi-arrow-up-right category-arrow"></i>
+                </a>
+            </div>
+        {% empty %}
+            <div class="col-12"><div class="empty-state py-4"><i class="bi bi-grid"></i><p class="mb-0">Categories will appear here as you build your collection.</p></div></div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="container py-5">
+    <div class="section-heading d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+        <div><span class="eyebrow">Fresh from the shelf</span><h2 class="section-title mt-2">A few favorites</h2></div>
+        <a class="text-link" href="{% url 'store:product_list' %}">Shop all products <i class="bi bi-arrow-up-right"></i></a>
+    </div>
+    <div class="row g-4">
+        {% for product in featured_products %}
+            <div class="col-12 col-sm-6 col-lg-3">{% include 'store/includes/product_card.html' %}</div>
+        {% empty %}
+            <div class="col-12"><div class="empty-state"><i class="bi bi-box-seam"></i><h3>No products yet</h3><p>The store is ready for its first product. Add one from the Django Admin dashboard.</p><a href="{% url 'store:product_list' %}" class="btn btn-dark rounded-pill">Browse the shop</a></div></div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="container py-5">
+    <div class="newsletter-panel row align-items-center g-4">
+        <div class="col-lg-8"><span class="eyebrow">A little less noise</span><h2 class="section-title mt-2 mb-2">Only the good stuff.</h2><p class="mb-0 text-muted">Thoughtful products, new arrivals, and useful ideas — whenever they are worth sharing.</p></div>
+        <div class="col-lg-4 text-lg-end"><a href="{% url 'store:register' %}" class="btn btn-dark rounded-pill px-4">Create an account <i class="bi bi-arrow-right ms-2"></i></a></div>
+    </div>
+</section>
+{% endblock %}
