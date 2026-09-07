@@ -1,34 +1,106 @@
 {% extends 'store/base.html' %}
 {% block title %}{{ product.name }} — Northstar Store{% endblock %}
 {% block content %}
-<section class="container py-5">
-    <nav aria-label="breadcrumb" class="mb-4"><ol class="breadcrumb small"><li class="breadcrumb-item"><a href="{% url 'store:home' %}">Home</a></li><li class="breadcrumb-item"><a href="{% url 'store:product_list' %}">Shop</a></li>{% if product.category %}<li class="breadcrumb-item"><a href="{{ product.category.get_absolute_url }}">{{ product.category.name }}</a></li>{% endif %}<li class="breadcrumb-item active" aria-current="page">{{ product.name }}</li></ol></nav>
-    <div class="row g-5 align-items-center">
+<section class="container pt-4 pt-lg-5">
+    <nav aria-label="breadcrumb" class="mb-3 mb-lg-4">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item"><a href="{% url 'store:home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'store:product_list' %}">Shop</a></li>
+            {% if product.category %}<li class="breadcrumb-item"><a href="{{ product.category.get_absolute_url }}">{{ product.category.name }}</a></li>{% endif %}
+            <li class="breadcrumb-item active" aria-current="page">{{ product.name }}</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4 g-lg-5 align-items-lg-center">
         <div class="col-lg-6">
             <div class="detail-image-wrap">
-                {% if product.image %}<img src="{{ product.image.url }}" class="detail-image" alt="{{ product.name }}">{% else %}<div class="detail-image placeholder-image"><i class="bi bi-box-seam"></i></div>{% endif %}
-                {% if product.has_discount %}<span class="product-tag detail-tag">Sale</span>{% endif %}
+                {% if product.image %}
+                    <img src="{{ product.image.url }}" class="detail-image" alt="{{ product.name }}">
+                {% else %}
+                    <div class="detail-image placeholder-image"><i class="bi bi-box-seam"></i></div>
+                {% endif %}
+                {% if product.has_discount %}<span class="product-tag tag-sale detail-tag">Sale</span>{% endif %}
             </div>
         </div>
-        <div class="col-lg-6 col-xl-5">
-            {% if product.category %}<span class="eyebrow">{{ product.category.name }}</span>{% endif %}
-            <h1 class="detail-title mt-3">{{ product.name }}</h1>
-            <div class="detail-price my-4">{% if product.has_discount %}<span class="price-current">${{ product.discount_price|floatformat:2 }}</span><span class="price-old fs-5">${{ product.price|floatformat:2 }}</span>{% else %}<span class="price-current">${{ product.price|floatformat:2 }}</span>{% endif %}</div>
-            <p class="detail-description">{{ product.description|linebreaksbr }}</p>
-            <div class="stock-note mb-4 {% if product.stock_quantity < 5 %}stock-low{% endif %}"><i class="bi bi-check2-circle me-2"></i>{{ product.stock_quantity }} available · Ready to ship</div>
-            {% if user.is_authenticated %}
-                <form method="post" action="{% url 'store:add_to_cart' product.id %}" class="d-flex flex-wrap gap-3 align-items-center">
-                    {% csrf_token %}
-                    <div class="quantity-control"><label for="quantity" class="visually-hidden">Quantity</label><button type="button" class="quantity-button" data-quantity-action="decrease" aria-label="Decrease quantity">−</button><input id="quantity" name="quantity" type="number" value="1" min="1" max="{{ product.stock_quantity }}" aria-label="Quantity"><button type="button" class="quantity-button" data-quantity-action="increase" aria-label="Increase quantity">+</button></div>
-                    <button class="btn btn-dark btn-lg rounded-pill flex-grow-1" type="submit"><i class="bi bi-bag-plus me-2"></i>Add to cart</button>
-                </form>
-            {% else %}
-                <a class="btn btn-dark btn-lg rounded-pill w-100" href="{% url 'store:login' %}?next={{ product.get_absolute_url|urlencode }}">Sign in to add to cart <i class="bi bi-arrow-right ms-2"></i></a>
-                <p class="small text-muted mt-3 text-center">New here? <a href="{% url 'store:register' %}">Create a free account</a>.</p>
-            {% endif %}
-            <div class="detail-meta row g-3 mt-4 pt-4 border-top"><div class="col-6"><span class="meta-label">Shipping</span><span>Carefully packed</span></div><div class="col-6"><span class="meta-label">Stock</span><span>Live inventory</span></div></div>
+        <div class="col-lg-6 col-xl-5 offset-xl-1">
+            <div class="sticky-lg-top" style="top:110px">
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                    {% if product.category %}<a class="eyebrow text-decoration-none" href="{{ product.category.get_absolute_url }}"><span class="eyebrow-line"></span>{{ product.category.name }}</a>{% endif %}
+                </div>
+                <h1 class="detail-title mb-3">{{ product.name }}</h1>
+                <div class="detail-price mb-4">
+                    {% if product.has_discount %}
+                        <span class="price-current">${{ product.discount_price|floatformat:2 }}</span>
+                        <span class="price-old">${{ product.price|floatformat:2 }}</span>
+                        <span class="save-badge"><i class="bi bi-tag-fill me-1"></i>Special price</span>
+                    {% else %}
+                        <span class="price-current">${{ product.price|floatformat:2 }}</span>
+                    {% endif %}
+                </div>
+                <p class="detail-description mb-0">{{ product.description|linebreaksbr }}</p>
+
+                <div class="my-4">
+                    {% if product.is_in_stock %}
+                        <span class="stock-note in"><i class="bi bi-check-circle"></i>In stock — {{ product.stock_quantity }} available, ready to ship</span>
+                    {% else %}
+                        <span class="stock-note out"><i class="bi bi-x-circle"></i>Sold out — check back soon</span>
+                    {% endif %}
+                </div>
+
+                {% if product.is_in_stock %}
+                    {% if user.is_authenticated %}
+                        <form method="post" action="{% url 'store:add_to_cart' product.id %}" class="d-flex flex-column flex-sm-row flex-wrap gap-3 align-items-sm-center">
+                            {% csrf_token %}
+                            <div class="quantity-control">
+                                <label for="quantity" class="visually-hidden">Quantity</label>
+                                <button type="button" class="quantity-button" data-quantity-action="decrease" aria-label="Decrease quantity">−</button>
+                                <input id="quantity" name="quantity" type="number" value="1" min="1" max="{{ product.stock_quantity }}" aria-label="Quantity">
+                                <button type="button" class="quantity-button" data-quantity-action="increase" aria-label="Increase quantity">+</button>
+                            </div>
+                            <button class="btn btn-brand btn-lg rounded-pill px-4 flex-grow-1 flex-sm-grow-0" type="submit" style="min-width:200px"><i class="bi bi-bag-plus me-2"></i>Add to cart</button>
+                        </form>
+                    {% else %}
+                        <div class="d-grid d-sm-flex gap-3">
+                            <a class="btn btn-brand btn-lg rounded-pill px-4" href="{% url 'store:login' %}?next={{ product.get_absolute_url|urlencode }}">Sign in to add to cart <i class="bi bi-arrow-right ms-2"></i></a>
+                        </div>
+                        <p class="small text-muted mt-3 mb-0">New here? <a href="{% url 'store:register' %}" class="fw-bold">Create a free account</a> to save your cart.</p>
+                    {% endif %}
+                {% endif %}
+
+                <div class="detail-perks row g-3">
+                    <div class="col-6"><div class="detail-perk"><i class="bi bi-box-seam"></i><span><b>Careful shipping</b><small>Tracked &amp; plastic-free</small></span></div></div>
+                    <div class="col-6"><div class="detail-perk"><i class="bi bi-arrow-repeat"></i><span><b>30-day returns</b><small>If it isn't for you</small></span></div></div>
+                    <div class="col-6"><div class="detail-perk"><i class="bi bi-shield-check"></i><span><b>Secure checkout</b><small>Details stay private</small></span></div></div>
+                    <div class="col-6"><div class="detail-perk"><i class="bi bi-chat-heart"></i><span><b>Real support</b><small>A person, not a bot</small></span></div></div>
+                </div>
+
+                <table class="meta-table mt-4">
+                    <tbody>
+                        {% if product.category %}<tr><td>Category</td><td>{{ product.category.name }}</td></tr>{% endif %}
+                        <tr><td>Availability</td><td>{% if product.is_in_stock %}{{ product.stock_quantity }} in stock{% else %}Sold out{% endif %}</td></tr>
+                        <tr><td>Shipping</td><td>Ships within 2 business days</td></tr>
+                        <tr><td>Returns</td><td>Free, up to 30 days</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </section>
-{% if related_products %}<section class="container py-5"><div class="section-heading d-flex justify-content-between align-items-end mb-4"><div><span class="eyebrow">You may also like</span><h2 class="section-title mt-2">More from the collection</h2></div><a class="text-link" href="{% url 'store:product_list' %}">Shop all <i class="bi bi-arrow-up-right"></i></a></div><div class="row g-4">{% for product in related_products %}<div class="col-12 col-sm-6 col-lg-3">{% include 'store/includes/product_card.html' %}</div>{% endfor %}</div></section>{% endif %}
+
+{% if related_products %}
+<section class="section-block tint">
+    <div class="container">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+            <div>
+                <span class="eyebrow"><span class="eyebrow-line"></span>You may also like</span>
+                <h2 class="section-title mt-2">More from the <em>collection</em></h2>
+            </div>
+            <a class="text-link text-nowrap" href="{% url 'store:product_list' %}">Shop all <i class="bi bi-arrow-up-right"></i></a>
+        </div>
+        <div class="row g-3 g-lg-4">
+            {% for product in related_products %}<div class="col-12 col-sm-6 col-lg-3">{% include 'store/includes/product_card.html' %}</div>{% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
 {% endblock %}

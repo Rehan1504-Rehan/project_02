@@ -1,6 +1,64 @@
 {% extends 'store/base.html' %}
 {% block title %}Checkout — Northstar Store{% endblock %}
 {% block content %}
-<section class="page-header"><div class="container py-5"><span class="eyebrow">One last step</span><h1 class="page-title mt-2">Checkout</h1><p class="lead text-muted mb-0">Tell us where to send your order. Payment is not collected in this simple store setup.</p></div></section>
-<section class="container py-5"><div class="row g-5"><div class="col-lg-7"><div class="form-panel"><h2 class="panel-title">Delivery details</h2><p class="text-muted mb-4">We will use these details to prepare your order.</p><div class="customer-callout d-flex align-items-center gap-3 mb-4"><span class="avatar-circle avatar-large">{{ user.username|slice:':1'|upper }}</span><div><strong>{{ user.get_full_name|default:user.username }}</strong><div class="small text-muted">{{ user.email }}</div></div></div><form method="post" novalidate>{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}<div class="mb-4"><label class="form-label" for="{{ form.shipping_address.id_for_label }}">{{ form.shipping_address.label }}</label>{{ form.shipping_address }}{% for error in form.shipping_address.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div><div class="mb-4"><label class="form-label" for="{{ form.phone_number.id_for_label }}">{{ form.phone_number.label }}</label>{{ form.phone_number }}{% for error in form.phone_number.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div><button class="btn btn-dark btn-lg rounded-pill px-4" type="submit">Place order <i class="bi bi-arrow-right ms-2"></i></button></form></div></div><div class="col-lg-5"><div class="summary-card sticky-lg-top"><h2 class="summary-title">Your order</h2>{% for item in items %}<div class="mini-order-item"><div class="mini-order-image">{% if item.product.image %}<img src="{{ item.product.image.url }}" alt="{{ item.product.name }}">{% else %}<div class="placeholder-image"><i class="bi bi-box-seam"></i></div>{% endif %}</div><div class="flex-grow-1"><strong>{{ item.product.name }}</strong><div class="small text-muted">Qty {{ item.quantity }}</div></div><span>${{ item.subtotal|floatformat:2 }}</span></div>{% endfor %}<hr><div class="summary-total"><span>Total</span><strong>${{ cart_total|floatformat:2 }}</strong></div><p class="small text-muted mt-3 mb-0"><i class="bi bi-info-circle me-1"></i> Your price is locked when the order is placed.</p></div></div></div></section>
+<section class="page-header">
+    <div class="container py-4 py-lg-5">
+        <span class="eyebrow"><span class="eyebrow-line"></span>One last step</span>
+        <h1 class="page-title mt-2">Checkout</h1>
+        <p class="lead mb-0">Tell us where to send your order. This demo store does not collect payment.</p>
+    </div>
+</section>
+<section class="container section-block pt-4 pt-lg-5">
+    <div class="row g-4 g-lg-5">
+        <div class="col-lg-7">
+            <div class="form-panel">
+                <h2 class="panel-title">Delivery details</h2>
+                <p class="summary-sub">We will use these details to prepare your order.</p>
+                <div class="customer-callout d-flex align-items-center gap-3 mb-4">
+                    <span class="avatar-circle avatar-large">{{ user.username|slice:':1'|upper }}</span>
+                    <div>
+                        <strong>{{ user.get_full_name|default:user.username }}</strong>
+                        <div class="small text-muted">{{ user.email }}</div>
+                    </div>
+                </div>
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}<div class="alert alert-danger py-2 px-3">{{ form.non_field_errors }}</div>{% endif %}
+                    <div class="mb-4">
+                        <label class="form-label" for="{{ form.shipping_address.id_for_label }}">{{ form.shipping_address.label }}</label>
+                        {{ form.shipping_address }}
+                        {% for error in form.shipping_address.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="{{ form.phone_number.id_for_label }}">{{ form.phone_number.label }}</label>
+                        {{ form.phone_number }}
+                        {% for error in form.phone_number.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+                    </div>
+                    <button class="btn btn-brand btn-lg rounded-pill px-4" type="submit">Place order <i class="bi bi-arrow-right ms-2"></i></button>
+                </form>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="summary-card sticky-lg-top" style="top:110px">
+                <h2 class="summary-title">Your order</h2>
+                <p class="summary-sub">Review your picks before placing the order.</p>
+                {% for item in items %}
+                    <div class="mini-order-item">
+                        <div class="mini-order-image">
+                            {% if item.product.image %}<img src="{{ item.product.image.url }}" alt="{{ item.product.name }}">{% else %}<div class="placeholder-image"><i class="bi bi-box-seam"></i></div>{% endif %}
+                        </div>
+                        <div class="flex-grow-1">
+                            <strong>{{ item.product.name }}</strong>
+                            <div class="mini-order-qty">Qty {{ item.quantity }} · ${{ item.product.get_price|floatformat:2 }} each</div>
+                        </div>
+                        <span>${{ item.subtotal|floatformat:2 }}</span>
+                    </div>
+                {% endfor %}
+                <hr class="summary-divider">
+                <div class="summary-total"><span>Total</span><strong>${{ cart_total|floatformat:2 }}</strong></div>
+                <p class="summary-foot mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Your price is locked when the order is placed.</p>
+            </div>
+        </div>
+    </div>
+</section>
 {% endblock %}

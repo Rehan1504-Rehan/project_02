@@ -1,6 +1,72 @@
 {% extends 'store/base.html' %}
 {% block title %}Your cart — Northstar Store{% endblock %}
 {% block content %}
-<section class="page-header"><div class="container py-5"><span class="eyebrow">Almost yours</span><h1 class="page-title mt-2">Your cart</h1><p class="lead text-muted mb-0">Review your picks before they make their way to you.</p></div></section>
-<section class="container py-5"><div class="row g-5"><div class="col-lg-8">{% if items %}<div class="cart-list">{% for item in items %}<div class="cart-item"><div class="cart-item-image">{% if item.product.image %}<img src="{{ item.product.image.url }}" alt="{{ item.product.name }}">{% else %}<div class="placeholder-image"><i class="bi bi-box-seam"></i></div>{% endif %}</div><div class="cart-item-info"><div class="small text-muted">{% if item.product.category %}{{ item.product.category.name }}{% else %}Product{% endif %}</div><h2><a href="{{ item.product.get_absolute_url }}">{{ item.product.name }}</a></h2><div class="price-current">${{ item.product.get_price|floatformat:2 }}</div><div class="cart-actions"><form method="post" action="{% url 'store:update_cart' item.id %}" class="quantity-control quantity-control-small">{% csrf_token %}<button type="submit" name="quantity" value="{{ item.quantity|add:'-1' }}" class="quantity-button" aria-label="Decrease quantity">−</button><span class="quantity-value">{{ item.quantity }}</span><button type="submit" name="quantity" value="{{ item.quantity|add:'1' }}" class="quantity-button" aria-label="Increase quantity">+</button></form><form method="post" action="{% url 'store:remove_from_cart' item.id %}">{% csrf_token %}<button type="submit" class="btn btn-link text-muted p-0 small"><i class="bi bi-trash3 me-1"></i>Remove</button></form></div></div><div class="cart-item-total"><span class="small text-muted">Subtotal</span><strong>${{ item.subtotal|floatformat:2 }}</strong></div></div>{% endfor %}</div><a href="{% url 'store:product_list' %}" class="text-link d-inline-block mt-4"><i class="bi bi-arrow-left me-2"></i>Continue shopping</a>{% else %}<div class="empty-state large-empty"><i class="bi bi-bag"></i><h2>Your cart is empty</h2><p>There is plenty of room for something useful.</p><a class="btn btn-dark rounded-pill" href="{% url 'store:product_list' %}">Start shopping</a></div>{% endif %}</div>{% if items %}<div class="col-lg-4"><div class="summary-card"><h2 class="summary-title">Order summary</h2><div class="summary-row"><span>Items</span><span>{{ cart.item_count }}</span></div><div class="summary-row"><span>Shipping</span><span class="text-muted">Calculated at checkout</span></div><hr><div class="summary-total"><span>Total</span><strong>${{ cart_total|floatformat:2 }}</strong></div><a href="{% url 'store:checkout' %}" class="btn btn-dark btn-lg rounded-pill w-100 mt-4">Checkout <i class="bi bi-arrow-right ms-2"></i></a><p class="small text-muted text-center mt-3 mb-0"><i class="bi bi-lock me-1"></i> Secure order placement</p></div></div>{% endif %}</div></section>
+<section class="page-header">
+    <div class="container py-4 py-lg-5">
+        <span class="eyebrow"><span class="eyebrow-line"></span>Almost yours</span>
+        <h1 class="page-title mt-2">Your <em>cart</em></h1>
+        <p class="lead mb-0">Review your picks before they make their way to you.</p>
+    </div>
+</section>
+<section class="container section-block pt-4 pt-lg-5">
+    <div class="row g-4 g-lg-5">
+        <div class="col-lg-8">
+            {% if items %}
+                <div class="cart-list">
+                    {% for item in items %}
+                        <div class="cart-item">
+                            <div class="cart-item-image">
+                                {% if item.product.image %}<img src="{{ item.product.image.url }}" alt="{{ item.product.name }}">{% else %}<div class="placeholder-image"><i class="bi bi-box-seam"></i></div>{% endif %}
+                            </div>
+                            <div class="cart-item-info">
+                                <div class="cart-item-cat">{% if item.product.category %}{{ item.product.category.name }}{% else %}Product{% endif %}</div>
+                                <h2><a href="{{ item.product.get_absolute_url }}">{{ item.product.name }}</a></h2>
+                                <div class="cart-item-unit">${{ item.product.get_price|floatformat:2 }} each {% if item.product.has_discount %}<s class="text-muted">${{ item.product.price|floatformat:2 }}</s>{% endif %}</div>
+                                <div class="cart-actions">
+                                    <form method="post" action="{% url 'store:update_cart' item.id %}" class="quantity-control quantity-control-small m-0">
+                                        {% csrf_token %}
+                                        <button type="submit" name="quantity" value="{{ item.quantity|add:'-1' }}" class="quantity-button" aria-label="Decrease quantity of {{ item.product.name }}">−</button>
+                                        <span class="quantity-value">{{ item.quantity }}</span>
+                                        <button type="submit" name="quantity" value="{{ item.quantity|add:'1' }}" class="quantity-button" aria-label="Increase quantity of {{ item.product.name }}">+</button>
+                                    </form>
+                                    <form method="post" action="{% url 'store:remove_from_cart' item.id %}" class="m-0">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-link remove-link p-0"><i class="bi bi-trash3 me-1"></i>Remove</button>
+                                    </form>
+                                </div>
+                            </div>
+                            <div class="cart-item-total">
+                                <span class="small">Subtotal</span>
+                                <strong>${{ item.subtotal|floatformat:2 }}</strong>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'store:product_list' %}" class="text-link d-inline-flex align-items-center gap-2 mt-4"><i class="bi bi-arrow-left"></i>Continue shopping</a>
+            {% else %}
+                <div class="empty-state large-empty">
+                    <i class="bi bi-bag"></i>
+                    <h2>Your cart is empty</h2>
+                    <p>There is plenty of room for something useful.</p>
+                    <a class="btn btn-brand rounded-pill px-4" href="{% url 'store:product_list' %}"><i class="bi bi-arrow-right me-2"></i>Start shopping</a>
+                </div>
+            {% endif %}
+        </div>
+        {% if items %}
+            <div class="col-lg-4">
+                <div class="summary-card sticky-lg-top" style="top:110px">
+                    <h2 class="summary-title">Order summary</h2>
+                    <p class="summary-sub">Shipping is calculated at checkout.</p>
+                    <div class="summary-row"><span>Items</span><span>{{ cart.item_count }} item{{ cart.item_count|pluralize }}</span></div>
+                    <div class="summary-row"><span>Merchandise</span><span>${{ cart_total|floatformat:2 }}</span></div>
+                    <div class="summary-row"><span>Shipping</span><span class="text-muted">At checkout</span></div>
+                    <hr class="summary-divider">
+                    <div class="summary-total mb-1"><span>Total</span><strong>${{ cart_total|floatformat:2 }}</strong></div>
+                    <a href="{% url 'store:checkout' %}" class="btn btn-brand btn-lg rounded-pill w-100 mt-4">Checkout <i class="bi bi-arrow-right ms-2"></i></a>
+                    <p class="summary-foot mt-3"><i class="bi bi-lock me-1"></i>Secure order placement — no payment collected here</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</section>
 {% endblock %}
