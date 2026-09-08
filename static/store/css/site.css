@@ -378,6 +378,21 @@ img { max-width: 100%; }
 
 .category-menu { border-radius: var(--radius-md); min-width: 260px; padding: .5rem; }
 .account-menu { border-radius: var(--radius-md); min-width: 240px; padding: .5rem; }
+/* The account box stays hidden until the avatar button is clicked. Declared
+   here as well as in Bootstrap so it never renders open if the CDN stylesheet
+   fails to load. */
+.account-dropdown { position: relative; }
+.account-dropdown .account-menu {
+    background: #fff;
+    display: none;
+    list-style: none;
+    margin: .35rem 0 0;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 1050;
+}
+.account-dropdown .account-menu.show { display: block; }
 .dropdown-menu { border: 1px solid var(--line); box-shadow: var(--shadow-lg); }
 .dropdown-item { border-radius: 9px; font-size: .87rem; font-weight: 500; padding: .5rem .7rem; }
 .dropdown-item:hover { background: var(--accent-soft); color: var(--accent-strong); }

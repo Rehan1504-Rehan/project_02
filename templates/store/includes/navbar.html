@@ -22,11 +22,11 @@
             </button>
 
             {% if user.is_authenticated %}
-                <div class="dropdown">
-                    <button class="header-icon-btn d-none d-sm-inline-flex" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account menu">
+                <div class="dropdown account-dropdown">
+                    <button class="header-icon-btn d-none d-sm-inline-flex" type="button" id="accountMenuBtn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" aria-haspopup="true" aria-controls="accountMenu" aria-label="Account menu">
                         <span class="avatar-chip">{{ user.username|slice:':1'|upper }}</span>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow account-menu">
+                    <ul class="dropdown-menu dropdown-menu-end shadow account-menu" id="accountMenu" aria-labelledby="accountMenuBtn">
                         <li><h6 class="dropdown-header">My account</h6></li>
                         <li><a class="dropdown-item" href="{% url 'store:profile' %}"><i class="bi bi-person-circle me-2"></i>Profile</a></li>
                         <li><a class="dropdown-item" href="{% url 'store:order_list' %}"><i class="bi bi-box-seam me-2"></i>My orders</a></li>
