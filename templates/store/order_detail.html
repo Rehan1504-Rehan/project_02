@@ -74,8 +74,12 @@
         </div>
     </div>
 </section>
+{% endblock %}
 
-{% if order.can_cancel %}
-    {% include 'store/includes/cancel_order_modal.html' with order=order %}
-{% endif %}
+{% block modals %}
+    {# Rendered at body level (base.html) so no transformed [data-reveal]
+       ancestor can re-anchor the fixed-position Bootstrap modal. #}
+    {% if order.can_cancel %}
+        {% include 'store/includes/cancel_order_modal.html' with order=order %}
+    {% endif %}
 {% endblock %}

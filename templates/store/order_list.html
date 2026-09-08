@@ -40,7 +40,6 @@
                                 <i class="bi bi-x-circle me-1"></i>Cancel order
                             </button>
                         </div>
-                        {% include 'store/includes/cancel_order_modal.html' with order=order %}
                     {% endif %}
                 </div>
             {% endfor %}
@@ -55,4 +54,18 @@
         </div>
     {% endif %}
 </section>
+{% endblock %}
+
+{% comment %}
+The confirmation dialogs stay out of the order cards: the cards live inside a
+[data-reveal] entrance wrapper that keeps a CSS transform, and a transform on
+an ancestor re-anchors Bootstrap's fixed-position modal so the page would just
+darken behind a misplaced dialog. Body level keeps them centred on the viewport.
+{% endcomment %}
+{% block modals %}
+    {% for order in orders %}
+        {% if order.can_cancel %}
+            {% include 'store/includes/cancel_order_modal.html' with order=order %}
+        {% endif %}
+    {% endfor %}
 {% endblock %}

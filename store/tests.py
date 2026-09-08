@@ -2,6 +2,7 @@ import base64
 import os
 import tempfile
 from decimal import Decimal
+from html.parser import HTMLParser
 from pathlib import Path
 from unittest.mock import patch
 
@@ -452,6 +453,74 @@ class OrderCancellationTests(TestCase):
         self.assertEqual(order.status, Order.Status.SHIPPED)
         self.assertEqual(self.stock(), 4)
         self.assertContains(response, "Left 1 order")
+
+    def test_cancel_confirmation_modal_is_rendered_at_body_level(self):
+        """The confirm dialog must never sit inside a transformed wrapper.
+
+        A Bootstrap modal is ``position: fixed``, and a fixed element is
+        positioned against its nearest ancestor that carries a CSS transform
+        or ``will-change: transform``. The order cards live inside a
+        ``[data-reveal]`` wrapper that has both (and hovering a card lifts it
+        with a transform of its own), so a dialog rendered inside the card
+        would be re-anchored to that box instead of the viewport: the page
+        darkens behind the backdrop while the dialog floats off-centre and the
+        buttons underneath stay unclickable. The modals block in base.html
+        keeps the dialog a direct child of ``<body>``.
+        """
+        order = self.place_order(quantity=1)
+
+        class CancelModalScanner(HTMLParser):
+            """Collects where each cancel modal and its trigger button sit."""
+
+            def __init__(self):
+                super().__init__()
+                self.stack = []
+                self.modal_parents = {}  # modal element id -> parent tag
+                self.trigger_targets = []
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                classes = attrs.get("class", "").split()
+                if tag == "div" and "modal" in classes and attrs.get("id", "").startswith("cancel-modal-"):
+                    self.modal_parents[attrs["id"]] = self.stack[-1] if self.stack else None
+                if tag == "button" and attrs.get("data-bs-toggle") == "modal":
+                    self.trigger_targets.append(attrs.get("data-bs-target", ""))
+                self.stack.append(tag)
+
+            def handle_endtag(self, tag):
+                for index in range(len(self.stack) - 1, -1, -1):
+                    if self.stack[index] == tag:
+                        del self.stack[index:]
+                        break
+
+        for url in (reverse("store:order_list"), order.get_absolute_url()):
+            scanner = CancelModalScanner()
+            scanner.feed(self.client.get(url).content.decode())
+            self.assertTrue(scanner.modal_parents, f"{url} should offer the cancellation dialog")
+            self.assertTrue(scanner.trigger_targets, f"{url} should have a cancel button")
+            self.assertEqual(
+                set(scanner.modal_parents.values()),
+                {"body"},
+                f"{url} nests the cancellation modal inside content that would break "
+                "its fixed positioning",
+            )
+            for target in scanner.trigger_targets:
+                self.assertIn(
+                    target.lstrip("#"),
+                    scanner.modal_parents,
+                    f"{url} opens a cancel modal that is not on the page",
+                )
+
+    def test_cancelled_order_has_no_cancel_modal_or_button(self):
+        """Once cancelled there must be nothing left to cancel on the page."""
+        order = self.place_order(quantity=1)
+        self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+
+        for url in (reverse("store:order_list"), order.get_absolute_url()):
+            page = self.client.get(url).content.decode()
+            self.assertNotIn("cancel-modal-", page, f"{url} still offers a cancel dialog")
+            self.assertNotIn("Cancel this order", page)
+            self.assertNotIn(">Cancel order<", page)
 
 
 class OrderItemDisplayTests(TestCase):
