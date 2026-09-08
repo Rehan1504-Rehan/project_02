@@ -18,6 +18,8 @@ It is intentionally a simple order system: customers can place an order with shi
 - Product images stored in the database, so uploads survive redeploys on hosts with an ephemeral filesystem.
 - Order items save the product name and price at purchase time. Later product price changes do not change old orders.
 - Customer order history and order detail pages.
+- Self-service order cancellation: customers can call off a Pending or Processing order from **My orders** or the order page, with a confirmation step, and every unit goes back into stock.
+- Staff order cancellation from Django Admin with the same stock return behaviour.
 - Customized Django Admin for products, images, categories, users, carts, orders, and order status.
 - Product image preview in Admin.
 - WhiteNoise static files, Gunicorn, PostgreSQL configuration through `DATABASE_URL`, and Railway deployment files.
@@ -213,12 +215,38 @@ The admin list supports search, category/availability/date filters, inline price
 5. The cart prevents quantities above available stock.
 6. Checkout validates the shipping address and phone number and creates the order in one database transaction.
 7. Stock is reduced, the cart is cleared, and the order appears under **My orders**.
+8. While the order is Pending or Processing, the customer can cancel it from **My orders** or the order page and get the stock back.
 
 No payment gateway is simulated. Add a real payment provider only as a separate, deliberate feature.
 
 ### Update products and order status
 
 In Admin, open **Products** to change prices, discount prices, descriptions, category, image, availability, and stock. Open **Orders** to review shipping information and change the status to Processing, Shipped, Delivered, or Cancelled. Old orders keep their `OrderItem.price` snapshot even after a catalog price edit.
+
+To cancel an order as staff, select it in the **Orders** list and run the **Cancel selected orders and restock items** action. That action calls the same code path the storefront uses, so the units go back into stock and `cancelled_at` is recorded. Editing the `status` field to *Cancelled* by hand changes the label only — it does not return stock.
+
+## Cancelling orders
+
+Customers and staff share one cancellation routine (`Order.cancel()`), so both routes behave identically:
+
+| | Customer (storefront) | Staff (Django Admin) |
+| --- | --- | --- |
+| How | **Cancel order** button on **My orders** or the order page | **Cancel selected orders and restock items** action |
+| Confirmation | A modal asks for confirmation before anything changes | Django's action confirmation page |
+
+**When an order can be cancelled.** Only while its status is **Pending** or **Processing**. Once it is **Shipped** or **Delivered** the button disappears and the customer is pointed at the returns policy instead. An order that is already **Cancelled** cannot be cancelled again.
+
+**What happens when it is cancelled.**
+
+- The status becomes `Cancelled` and `cancelled_at` is stamped with the time.
+- Every line's quantity is added back to its product's `stock_quantity`.
+- A product that checkout switched off because it sold out is switched back on, so returned units are visible to shoppers again. A product an admin switched off by hand while it still had stock stays off.
+- The order stays in **My orders** with a cancelled badge, and the order page shows when it was cancelled.
+- A product deleted from the catalog is skipped rather than causing an error, because `OrderItem.product` is `SET_NULL`.
+
+The whole operation runs in one transaction with the order row and every product row locked, so a double click, or a customer and an admin cancelling at the same moment, cannot return the same stock twice.
+
+The total is never refunded automatically: the project deliberately has no payment gateway, so a real deployment would add its refund step alongside this.
 
 ## Environment variables
 
@@ -377,6 +405,8 @@ Each `OrderItem` has:
 - `quantity`.
 
 The order pages render `OrderItem.price`, not the current `Product.price`, so changing a product's price later cannot rewrite an old order.
+
+Cancellation is the mirror image of checkout and is just as careful: `Order.cancel()` re-reads the order with `select_for_update()` inside a transaction, refuses any order past the Pending/Processing window, and returns each line's quantity to its locked product row. Calling it twice is safe — the second call reports that nothing was cancelled rather than restocking again. See [Cancelling orders](#cancelling-orders).
 
 ## Testing and useful commands
 

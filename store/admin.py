@@ -1,6 +1,6 @@
 from django import forms
 from django.conf import settings
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BuiltInUserAdmin
 from django.utils.html import format_html
@@ -147,18 +147,69 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("order_number", "user", "total_amount", "status", "created_at", "updated_at")
+    list_display = (
+        "order_number",
+        "user",
+        "total_amount",
+        "status",
+        "created_at",
+        "cancelled_at",
+    )
     list_filter = ("status", "created_at", "updated_at")
     search_fields = ("order_number", "user__username", "user__email", "phone_number", "shipping_address")
-    readonly_fields = ("order_number", "user", "total_amount", "created_at", "updated_at")
+    readonly_fields = (
+        "order_number",
+        "user",
+        "total_amount",
+        "created_at",
+        "updated_at",
+        "cancelled_at",
+    )
     date_hierarchy = "created_at"
     list_editable = ("status",)
     inlines = (OrderItemInline,)
+    actions = ("cancel_orders",)
     fieldsets = (
-        ("Order", {"fields": ("order_number", "user", "total_amount", "status")}),
+        (
+            "Order",
+            {
+                "fields": ("order_number", "user", "total_amount", "status"),
+                "description": (
+                    "Use the <strong>Cancel selected orders and restock items</strong> "
+                    "action to cancel an order: it returns the units to stock. Editing "
+                    "the status field by hand changes the label only."
+                ),
+            },
+        ),
         ("Delivery", {"fields": ("shipping_address", "phone_number")}),
-        ("Dates", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
+        ("Dates", {"fields": ("created_at", "cancelled_at", "updated_at"), "classes": ("collapse",)}),
     )
+
+    @admin.action(description="Cancel selected orders and restock items")
+    def cancel_orders(self, request, queryset):
+        cancelled = 0
+        skipped = 0
+        for order in queryset:
+            # Order.cancel() refuses anything already cancelled, shipped or
+            # delivered, and restocks inside the same transaction, so a bulk
+            # selection can be mixed without any extra checking here.
+            if order.cancel():
+                cancelled += 1
+            else:
+                skipped += 1
+        if cancelled:
+            self.message_user(
+                request,
+                f"Cancelled {cancelled} order(s) and returned their items to stock.",
+                messages.SUCCESS,
+            )
+        if skipped:
+            self.message_user(
+                request,
+                f"Left {skipped} order(s) unchanged — they were already cancelled, "
+                f"shipped or delivered.",
+                messages.WARNING,
+            )
 
 
 @admin.register(OrderItem)
