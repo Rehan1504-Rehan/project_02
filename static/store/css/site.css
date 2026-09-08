@@ -1538,6 +1538,23 @@ html.nav-lock, body.nav-lock {
 .order-meta-label { color: var(--muted-2); font-size: .66rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
 .order-meta-value { font-size: .9rem; margin: .2rem 0 1.1rem; }
 
+/* ---------- Order cancellation ---------- */
+
+/* The card-wide link wraps everything above the cancel button, so the button
+   is a sibling of the link instead of a descendant (a button cannot nest in an
+   anchor). Inheriting the card's flex column keeps the layout identical. */
+.order-card-link { color: inherit; display: flex; flex-direction: column; gap: .7rem; text-decoration: none; }
+.order-card-actions { border-top: 1px dashed var(--line); display: flex; justify-content: flex-end; padding-top: .75rem; }
+
+/* Stands in for the green success tick when an order has been called off. */
+.confirmation-icon-cancelled { background: var(--sale); box-shadow: 0 12px 26px rgba(190, 24, 93, .32); }
+.order-cancel-cta { margin-top: 1.4rem; }
+.cancel-hint { color: var(--muted); font-size: .82rem; }
+.cancel-hint a { color: var(--accent-strong); font-weight: 600; }
+.cancel-modal { border: 0; border-radius: var(--radius-lg); }
+.cancel-modal .modal-header { border-bottom: 1px solid var(--line); }
+.cancel-modal .modal-footer { border-top: 1px solid var(--line); }
+
 /* ---------- Deals panel ---------- */
 
 .deals-panel {

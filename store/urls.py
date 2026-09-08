@@ -29,4 +29,9 @@ urlpatterns = [
         views.order_detail,
         name="order_detail",
     ),
+    path(
+        "orders/<str:order_number>/cancel/",
+        views.cancel_order,
+        name="order_cancel",
+    ),
 ]

@@ -5,10 +5,11 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
 from django.core.validators import MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.text import slugify
 
 
@@ -287,6 +288,17 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # The window in which an order can still be called off. Once a parcel has
+    # been handed to the carrier (shipped or delivered) cancelling would strand
+    # it in transit, so customers are pointed at the returns process instead.
+    CANCELLABLE_STATUSES = (Status.PENDING, Status.PROCESSING)
+
+    cancelled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the order was cancelled; empty while it is still live.",
+    )
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [
@@ -299,6 +311,75 @@ class Order(models.Model):
 
     def get_absolute_url(self):
         return reverse("store:order_detail", args=[self.order_number])
+
+    @property
+    def can_cancel(self) -> bool:
+        """True while the customer (or staff) may still call this order off."""
+        return self.status in self.CANCELLABLE_STATUSES
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.status == self.Status.CANCELLED
+
+    def cancel(self, *, restock: bool = True) -> bool:
+        """Cancel the order and put its items back on the shelf.
+
+        Returns ``True`` when this call is the one that cancelled the order,
+        and ``False`` when it had already been cancelled or has moved past the
+        cancellable window. Calling it twice is therefore safe: the second call
+        reports ``False`` and never restocks a second time.
+
+        The whole thing runs in one locked transaction, so a customer clicking
+        the button twice, or staff cancelling while the customer does, cannot
+        double the returned stock or race with a checkout selling the same
+        units.
+        """
+        with transaction.atomic():
+            # Re-read the row under a lock: the instance the caller holds may
+            # be stale, and the status check has to happen inside the lock to
+            # be worth anything.
+            order = Order.objects.select_for_update().get(pk=self.pk)
+            if order.status not in self.CANCELLABLE_STATUSES:
+                return False
+
+            if restock:
+                self._restock(order)
+
+            order.status = self.Status.CANCELLED
+            order.cancelled_at = timezone.now()
+            order.save(update_fields=["status", "cancelled_at", "updated_at"])
+
+        # Keep the caller's copy in step with what was committed.
+        self.status = order.status
+        self.cancelled_at = order.cancelled_at
+        return True
+
+    @staticmethod
+    def _restock(order: "Order") -> None:
+        """Add each line's quantity back to its product, under row locks."""
+        lines = list(order.items.select_related("product"))
+        # Lock every product up front so a concurrent checkout cannot slip a
+        # sale in between our read and our write.
+        products = {
+            product.pk: product
+            for product in Product.objects.select_for_update().filter(
+                pk__in=[line.product_id for line in lines if line.product_id]
+            )
+        }
+        for line in lines:
+            product = products.get(line.product_id)
+            if product is None:
+                # The catalog entry was deleted later (OrderItem.product is
+                # SET_NULL), so there is no inventory to return the units to.
+                continue
+            was_sold_out = product.stock_quantity == 0
+            product.stock_quantity += line.quantity
+            if was_sold_out and not product.available:
+                # Checkout switches a product off once it sells out; undoing
+                # that here puts it back on the shelf. A product an admin
+                # switched off by hand while it still had stock is left alone.
+                product.available = True
+            product.save(update_fields=["stock_quantity", "available", "updated_at"])
 
 
 class OrderItem(models.Model):
@@ -329,4 +410,10 @@ class OrderItem(models.Model):
 
     @property
     def line_total(self) -> Decimal:
+        # Django Admin renders one blank inline row as the template for "add
+        # another", and that row has no figures yet. Returning zero keeps the
+        # order and order-item pages openable instead of raising TypeError on
+        # ``None * None``.
+        if self.price is None or self.quantity is None:
+            return Decimal("0.00")
         return self.price * self.quantity

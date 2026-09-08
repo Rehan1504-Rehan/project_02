@@ -525,6 +525,31 @@ def order_detail(request: HttpRequest, order_number: str) -> HttpResponse:
     return render(request, "store/order_detail.html", {"order": order})
 
 
+@require_POST
+@login_required
+def cancel_order(request: HttpRequest, order_number: str) -> HttpResponse:
+    """Cancel one of the signed-in customer's orders.
+
+    The lookup is scoped to ``user=request.user``, so guessing another
+    customer's order number 404s instead of cancelling their order. Cancelling
+    is a POST-only action because it has a real side effect (stock moves back
+    to the shelf) and must not fire from a link, a crawler or a prefetch.
+    """
+    order = get_object_or_404(Order, order_number=order_number, user=request.user)
+    if order.cancel():
+        messages.success(
+            request,
+            f"Order {order.order_number} was cancelled and its items are back in stock.",
+        )
+    else:
+        messages.error(
+            request,
+            f"Order {order.order_number} can no longer be cancelled because it has "
+            f"{order.get_status_display().lower()}.",
+        )
+    return redirect("store:order_detail", order_number=order.order_number)
+
+
 # Static information pages linked from the footer. Keeping them as real routes
 # avoids dead placeholder links in the storefront.
 INFO_PAGES = {

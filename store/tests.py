@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.template.defaultfilters import date as date_filter
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -211,6 +212,259 @@ class StoreFlowTests(TestCase):
         finally:
             if media_file.exists():
                 media_file.unlink()
+
+
+class OrderCancellationTests(TestCase):
+    """Cancelling calls an order off and hands the units back to the shelf."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="canceller",
+            email="canceller@example.com",
+            password="Strong-password-123",
+        )
+        self.category = Category.objects.create(name="Stationery", description="Paper goods")
+        self.product = Product.objects.create(
+            name="Notebook",
+            description="A hard-backed ruled notebook.",
+            price=Decimal("20.00"),
+            category=self.category,
+            stock_quantity=5,
+            available=True,
+        )
+
+    def place_order(self, quantity=1):
+        """Check out for real so the order is built the way customers build it."""
+        self.client.force_login(self.user)
+        self.client.post(reverse("store:add_to_cart", args=[self.product.pk]), {"quantity": quantity})
+        self.client.post(
+            reverse("store:checkout"),
+            {"shipping_address": "4 Hill Road, Surat 395001", "phone_number": "+91 98765 43210"},
+        )
+        return Order.objects.get(user=self.user)
+
+    def stock(self):
+        return Product.objects.get(pk=self.product.pk).stock_quantity
+
+    def test_customer_can_cancel_a_pending_order_and_stock_returns(self):
+        order = self.place_order(quantity=2)
+        self.assertEqual(self.stock(), 3, "checkout should have taken the units")
+
+        response = self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+        self.assertRedirects(response, order.get_absolute_url())
+
+        order.refresh_from_db()
+        self.assertTrue(order.is_cancelled)
+        self.assertFalse(order.can_cancel)
+        self.assertIsNotNone(order.cancelled_at)
+        self.assertEqual(self.stock(), 5, "cancelling should give the units back")
+
+    def test_cancelled_order_page_shows_when_it_was_cancelled(self):
+        order = self.place_order(quantity=1)
+        self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+        order.refresh_from_db()
+
+        page = self.client.get(order.get_absolute_url())
+
+        self.assertContains(page, "This order was cancelled")
+        self.assertContains(page, date_filter(order.cancelled_at, "M j, Y · g:i A"))
+        # A mistyped template tag would reach the browser as literal "{{ ... }}"
+        # text instead of the rendered date, so nothing of the kind may ship.
+        self.assertNotContains(page, "{{")
+
+    def test_cancelling_a_sold_out_order_puts_it_back_on_the_shelf(self):
+        # Checkout hides a product once it sells out; cancelling has to undo
+        # that or the returned unit would be invisible to shoppers.
+        self.product.stock_quantity = 1
+        self.product.save()
+        order = self.place_order(quantity=1)
+
+        product = Product.objects.get(pk=self.product.pk)
+        self.assertEqual(product.stock_quantity, 0)
+        self.assertFalse(product.available)
+
+        self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+
+        product.refresh_from_db()
+        self.assertEqual(product.stock_quantity, 1)
+        self.assertTrue(product.available)
+
+    def test_cancelling_does_not_re_enable_a_discontinued_product(self):
+        # A product switched off by hand while it still had stock is an admin
+        # decision, not a sold-out flag, so cancelling must leave it off.
+        self.product.available = False
+        self.product.save()
+        order = Order.objects.create(
+            user=self.user,
+            total_amount=Decimal("20.00"),
+            shipping_address="4 Hill Road",
+            phone_number="555",
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            product_name=self.product.name,
+            quantity=1,
+            price=Decimal("20.00"),
+        )
+
+        self.client.force_login(self.user)
+        self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+
+        product = Product.objects.get(pk=self.product.pk)
+        self.assertEqual(product.stock_quantity, 6)
+        self.assertFalse(product.available)
+
+    def test_shipped_order_cannot_be_cancelled(self):
+        order = self.place_order(quantity=1)
+        order.status = Order.Status.SHIPPED
+        order.save()
+
+        self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.SHIPPED)
+        self.assertIsNone(order.cancelled_at)
+        self.assertEqual(self.stock(), 4, "a refused cancel must not restock")
+
+    def test_delivered_order_cannot_be_cancelled(self):
+        order = self.place_order(quantity=1)
+        order.status = Order.Status.DELIVERED
+        order.save()
+
+        self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.DELIVERED)
+        self.assertEqual(self.stock(), 4)
+
+    def test_cancelling_twice_only_returns_the_stock_once(self):
+        order = self.place_order(quantity=2)
+        self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+        self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+
+        self.assertEqual(self.stock(), 5)
+        self.assertEqual(Order.objects.get(pk=order.pk).status, Order.Status.CANCELLED)
+
+    def test_cancelling_an_order_for_a_deleted_product_is_safe(self):
+        order = self.place_order(quantity=1)
+        self.product.delete()  # OrderItem.product is SET_NULL, the line stays.
+
+        self.assertTrue(order.cancel())
+        self.assertTrue(order.is_cancelled)
+
+    def test_another_customers_order_cannot_be_cancelled(self):
+        order = self.place_order(quantity=1)
+        other_user = User.objects.create_user(username="other", password="Other-pass-123")
+        self.client.force_login(other_user)
+
+        response = self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+
+        self.assertEqual(response.status_code, 404)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PENDING)
+        self.assertEqual(self.stock(), 4)
+
+    def test_cancel_requires_a_post_request(self):
+        order = self.place_order(quantity=1)
+
+        response = self.client.get(reverse("store:order_cancel", args=[order.order_number]))
+
+        self.assertEqual(response.status_code, 405)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PENDING)
+
+    def test_cancel_requires_authentication(self):
+        order = self.place_order(quantity=1)
+        self.client.logout()
+
+        response = self.client.post(reverse("store:order_cancel", args=[order.order_number]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response["Location"])
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PENDING)
+
+    def test_cancel_button_only_appears_while_the_order_is_cancellable(self):
+        order = self.place_order(quantity=1)
+        detail_url = reverse("store:order_detail", args=[order.order_number])
+
+        page = self.client.get(detail_url)
+        self.assertContains(page, "Cancel this order")
+        self.assertContains(page, f"cancel-modal-{order.order_number}")
+
+        order.status = Order.Status.DELIVERED
+        order.save()
+        page = self.client.get(detail_url)
+        self.assertNotContains(page, "Cancel this order")
+        self.assertContains(page, "returns policy", html=False)
+
+    def test_order_list_offers_cancel_only_for_live_orders(self):
+        cancellable = self.place_order(quantity=1)
+        too_late = Order.objects.create(
+            user=self.user,
+            total_amount=Decimal("5.00"),
+            shipping_address="4 Hill Road",
+            phone_number="555",
+            status=Order.Status.SHIPPED,
+        )
+
+        page = self.client.get(reverse("store:order_list"))
+
+        self.assertContains(page, f"cancel-modal-{cancellable.order_number}")
+        self.assertNotContains(page, f"cancel-modal-{too_late.order_number}")
+
+    def test_admin_cancel_action_restocks_the_selected_orders(self):
+        admin_user = User.objects.create_superuser(
+            username="boss", password="Admin-pass-123", email="boss@example.com"
+        )
+        order = self.place_order(quantity=2)
+        self.client.force_login(admin_user)
+
+        response = self.client.post(
+            reverse("admin:store_order_changelist"),
+            {"action": "cancel_orders", "_selected_action": [str(order.pk)]},
+            follow=True,
+        )
+
+        order.refresh_from_db()
+        self.assertTrue(order.is_cancelled)
+        self.assertIsNotNone(order.cancelled_at)
+        self.assertEqual(self.stock(), 5)
+        self.assertContains(response, "Cancelled 1 order")
+
+    def test_admin_cancel_action_skips_orders_that_are_too_far_along(self):
+        admin_user = User.objects.create_superuser(
+            username="boss", password="Admin-pass-123", email="boss@example.com"
+        )
+        order = self.place_order(quantity=1)
+        order.status = Order.Status.SHIPPED
+        order.save()
+        self.client.force_login(admin_user)
+
+        response = self.client.post(
+            reverse("admin:store_order_changelist"),
+            {"action": "cancel_orders", "_selected_action": [str(order.pk)]},
+            follow=True,
+        )
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.SHIPPED)
+        self.assertEqual(self.stock(), 4)
+        self.assertContains(response, "Left 1 order")
+
+
+class OrderItemDisplayTests(TestCase):
+    """Display helpers must survive the blank row Admin renders as a template."""
+
+    def test_line_total_of_a_saved_item_multiplies_price_and_quantity(self):
+        item = OrderItem(price=Decimal("20.00"), quantity=3)
+        self.assertEqual(item.line_total, Decimal("60.00"))
+
+    def test_line_total_of_an_unsaved_item_does_not_crash(self):
+        # Admin renders an empty inline row to clone when adding another, so
+        # this property is evaluated on an instance with no figures at all.
+        self.assertEqual(OrderItem().line_total, Decimal("0.00"))
 
 
 # A tiny but genuine 1x1 PNG, so ImageField validation is exercised for real.
