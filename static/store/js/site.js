@@ -79,6 +79,37 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // --- Account menu (top-right avatar) -----------------------------------
+    // Bootstrap's dropdown plugin normally handles this. This fallback keeps
+    // the menu hidden by default and toggles it on click when Bootstrap's JS
+    // is unavailable, so the box is never stuck open.
+    const accountBtn = document.getElementById("accountMenuBtn");
+    const accountMenu = document.getElementById("accountMenu");
+    if (accountBtn && accountMenu && !(window.bootstrap && window.bootstrap.Dropdown)) {
+        const setAccountOpen = (open) => {
+            accountMenu.classList.toggle("show", open);
+            accountBtn.classList.toggle("show", open);
+            accountBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        };
+        setAccountOpen(false);
+        accountBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setAccountOpen(!accountMenu.classList.contains("show"));
+        });
+        document.addEventListener("click", (event) => {
+            if (!accountMenu.contains(event.target) && !accountBtn.contains(event.target)) {
+                setAccountOpen(false);
+            }
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && accountMenu.classList.contains("show")) {
+                setAccountOpen(false);
+                accountBtn.focus();
+            }
+        });
+    }
+
     // --- Scroll-in reveal animations ---------------------------------------
     const revealEls = document.querySelectorAll("[data-reveal]");
     if (reduceMotion || !("IntersectionObserver" in window)) {
