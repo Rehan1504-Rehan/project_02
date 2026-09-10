@@ -170,3 +170,32 @@ class CheckoutForm(forms.Form):
         if not re.fullmatch(r"[+()\-\s\d.]{7,30}", phone):
             raise forms.ValidationError("Enter a valid phone number.")
         return phone
+
+
+class OTPVerificationForm(forms.Form):
+    otp = forms.CharField(
+        label="Enter 6-digit OTP",
+        max_length=6,
+        min_length=6,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control form-control-lg text-center otp-input",
+                "placeholder": "• • • • • •",
+                "maxlength": "6",
+                "inputmode": "numeric",
+                "pattern": "[0-9]{6}",
+                "autocomplete": "one-time-code",
+                "autofocus": "autofocus",
+                "style": "letter-spacing: 0.5em; font-size: 1.6rem; font-weight: 700; font-family: monospace;",
+            }
+        ),
+    )
+
+    def clean_otp(self):
+        otp = self.cleaned_data.get("otp", "").strip()
+        if not otp.isdigit():
+            raise forms.ValidationError("Please enter a valid 6-digit numeric OTP.")
+        if len(otp) != 6:
+            raise forms.ValidationError("The OTP must be exactly 6 digits.")
+        return otp
+

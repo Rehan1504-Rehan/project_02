@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BuiltInUserAdmin
 from django.utils.html import format_html
 
-from .models import Cart, CartItem, Category, MediaFile, Order, OrderItem, Product
+from .models import Cart, CartItem, Category, EmailOTP, MediaFile, Order, OrderItem, Product
 
 
 class StockStatusFilter(admin.SimpleListFilter):
@@ -236,6 +236,15 @@ class CartAdmin(admin.ModelAdmin):
     @admin.display(description="Items")
     def item_count_display(self, obj):
         return obj.item_count()
+
+
+@admin.register(EmailOTP)
+class EmailOTPAdmin(admin.ModelAdmin):
+    list_display = ("email", "otp", "attempts", "is_verified", "created_at")
+    list_filter = ("is_verified", "created_at")
+    search_fields = ("email", "otp")
+    readonly_fields = ("email", "otp", "attempts", "is_verified", "created_at")
+
 
 
 # Django registers the built-in User model by default. Re-register it with

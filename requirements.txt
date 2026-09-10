@@ -5,3 +5,6 @@ Pillow>=11.0,<13.0
 python-dotenv>=1.0,<2.0
 psycopg[binary]>=3.2,<4.0
 whitenoise>=6.8,<7.0
+# Optional: Brevo Python SDK (not required since Brevo SMTP is handled by Django core mail)
+# sib-api-v3-sdk>=7.6.0
+
