@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import otp_views, views
 
 
 app_name = "store"
@@ -12,7 +12,9 @@ urlpatterns = [
     path("category/<slug:slug>/", views.category_products, name="category_products"),
     path("deals/", views.deals, name="deals"),
     path("info/<slug:page>/", views.info_page, name="info_page"),
-    path("register/", views.register_view, name="register"),
+    path("register/", otp_views.register_view_with_otp, name="register"),
+    path("verify-otp/", otp_views.verify_otp_view, name="verify_otp"),
+    path("resend-otp/", otp_views.resend_otp_view, name="resend_otp"),
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("profile/", views.profile, name="profile"),
