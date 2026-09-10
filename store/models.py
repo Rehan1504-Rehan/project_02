@@ -1,6 +1,4 @@
-from datetime import timedelta
 from decimal import Decimal
-import secrets
 import uuid
 
 from django.conf import settings
@@ -419,31 +417,3 @@ class OrderItem(models.Model):
         if self.price is None or self.quantity is None:
             return Decimal("0.00")
         return self.price * self.quantity
-
-
-class EmailOTP(models.Model):
-    """Stores one-time verification codes sent during registration."""
-
-    email = models.EmailField(db_index=True)
-    otp = models.CharField(max_length=6)
-    created_at = models.DateTimeField(default=timezone.now)
-    is_verified = models.BooleanField(default=False)
-    attempts = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        ordering = ["-created_at"]
-        verbose_name = "Email OTP"
-        verbose_name_plural = "Email OTPs"
-
-    def __str__(self) -> str:
-        return f"OTP for {self.email} ({self.otp})"
-
-    def is_expired(self) -> bool:
-        expiry_minutes = getattr(settings, "OTP_EXPIRY_MINUTES", 5)
-        return timezone.now() > self.created_at + timedelta(minutes=expiry_minutes)
-
-    @staticmethod
-    def generate_otp() -> str:
-        """Generate a cryptographically secure 6-digit numeric OTP."""
-        return f"{secrets.randbelow(900000) + 100000:06d}"
-

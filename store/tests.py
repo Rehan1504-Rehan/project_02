@@ -17,7 +17,7 @@ from django.urls import reverse
 from ecommerce.startup import run_startup_tasks
 
 from .admin import ProductAdminForm
-from .models import CartItem, Category, EmailOTP, MediaFile, Order, OrderItem, Product
+from .models import CartItem, Category, MediaFile, Order, OrderItem, Product
 
 
 User = get_user_model()
@@ -47,7 +47,6 @@ class StoreFlowTests(TestCase):
         self.assertTrue(self.client.login(username="shopper", password="Strong-password-123"))
 
     def test_registration_hashes_password_and_persists_user(self):
-        # Registration step 1: submit registration form, redirect to OTP verification
         response = self.client.post(
             reverse("store:register"),
             {
@@ -59,29 +58,10 @@ class StoreFlowTests(TestCase):
                 "password2": "Another-strong-password-123",
             },
         )
-        self.assertRedirects(response, reverse("store:verify_otp"))
-        # User not created yet until OTP is verified
-        self.assertFalse(User.objects.filter(username="new-customer").exists())
-
-        # Retrieve generated OTP
-        otp_record = EmailOTP.objects.get(email="new@example.com")
-        self.assertEqual(len(otp_record.otp), 6)
-
-        # Registration step 2: submit correct OTP
-        verify_resp = self.client.post(
-            reverse("store:verify_otp"),
-            {"otp": otp_record.otp},
-        )
-        self.assertRedirects(verify_resp, reverse("store:home"))
-
-        # User is created and password hashed
+        self.assertRedirects(response, reverse("store:login"))
         created = User.objects.get(username="new-customer")
         self.assertNotEqual(created.password, "Another-strong-password-123")
         self.assertTrue(created.check_password("Another-strong-password-123"))
-        # OTP is deleted after verification
-        self.assertFalse(EmailOTP.objects.filter(email="new@example.com").exists())
-        # User is logged in
-        self.assertTrue(verify_resp.wsgi_request.user.is_authenticated)
 
     def test_login_accepts_username_and_email_and_logout(self):
         response = self.client.post(
@@ -863,181 +843,3 @@ class AdminSetupCommandTests(TestCase):
         self.assertTrue(admin.is_superuser)
         self.assertTrue(admin.check_password(env["ADMIN_PASSWORD"]))
         self.assertEqual(User.objects.filter(username="ADMIN").count(), 1)
-
-
-class EmailOTPVerificationFlowTests(TestCase):
-    """Full test coverage for Free Brevo Email OTP verification flow."""
-
-    def test_email_otp_model_generation_and_expiration(self):
-        otp = EmailOTP.generate_otp()
-        self.assertEqual(len(otp), 6)
-        self.assertTrue(otp.isdigit())
-
-        record = EmailOTP.objects.create(email="test@example.com", otp=otp)
-        self.assertFalse(record.is_expired())
-
-        # Expired when created > 5 minutes ago
-        from datetime import timedelta
-        from django.utils import timezone
-
-        record.created_at = timezone.now() - timedelta(minutes=6)
-        record.save()
-        self.assertTrue(record.is_expired())
-
-    def test_registration_flow_with_otp_verification(self):
-        # Step 1: Submit valid registration form
-        response = self.client.post(
-            reverse("store:register"),
-            {
-                "username": "johndoe",
-                "email": "johndoe@example.com",
-                "first_name": "John",
-                "last_name": "Doe",
-                "password1": "Secure-pass-12345",
-                "password2": "Secure-pass-12345",
-            },
-        )
-        self.assertRedirects(response, reverse("store:verify_otp"))
-
-        # User is not created in DB yet
-        self.assertFalse(User.objects.filter(username="johndoe").exists())
-
-        # OTP record created
-        otp_record = EmailOTP.objects.get(email="johndoe@example.com")
-        self.assertEqual(len(otp_record.otp), 6)
-        self.assertEqual(otp_record.attempts, 0)
-
-        # Step 2: Visit verify OTP page
-        verify_page = self.client.get(reverse("store:verify_otp"))
-        self.assertEqual(verify_page.status_code, 200)
-        self.assertContains(verify_page, "johndoe@example.com")
-        self.assertContains(verify_page, "Spam")
-        self.assertContains(verify_page, "Resend verification code")
-
-        # Step 3: Enter invalid OTP
-        wrong_resp = self.client.post(
-            reverse("store:verify_otp"),
-            {"otp": "000000" if otp_record.otp != "000000" else "111111"},
-        )
-        self.assertEqual(wrong_resp.status_code, 200)
-        self.assertContains(wrong_resp, "Invalid verification code")
-        otp_record.refresh_from_db()
-        self.assertEqual(otp_record.attempts, 1)
-
-        # Step 4: Enter correct OTP
-        valid_resp = self.client.post(
-            reverse("store:verify_otp"),
-            {"otp": otp_record.otp},
-        )
-        self.assertRedirects(valid_resp, reverse("store:home"))
-
-        # User is created and authenticated
-        user = User.objects.get(username="johndoe")
-        self.assertEqual(user.email, "johndoe@example.com")
-        self.assertEqual(user.first_name, "John")
-        self.assertEqual(user.last_name, "Doe")
-        self.assertTrue(user.check_password("Secure-pass-12345"))
-        self.assertTrue(valid_resp.wsgi_request.user.is_authenticated)
-
-        # OTP record is deleted after success
-        self.assertFalse(EmailOTP.objects.filter(email="johndoe@example.com").exists())
-
-    def test_otp_max_attempts_lockout(self):
-        self.client.post(
-            reverse("store:register"),
-            {
-                "username": "attemptuser",
-                "email": "attempt@example.com",
-                "first_name": "Attempt",
-                "last_name": "User",
-                "password1": "Secure-pass-12345",
-                "password2": "Secure-pass-12345",
-            },
-        )
-        otp_record = EmailOTP.objects.get(email="attempt@example.com")
-
-        # Attempt 1
-        self.client.post(reverse("store:verify_otp"), {"otp": "000000"})
-        # Attempt 2
-        self.client.post(reverse("store:verify_otp"), {"otp": "000000"})
-        # Attempt 3
-        resp = self.client.post(reverse("store:verify_otp"), {"otp": "000000"})
-        self.assertContains(resp, "Maximum attempts exceeded")
-
-        # Even with correct OTP now, attempts >= 3 is blocked
-        resp_blocked = self.client.post(reverse("store:verify_otp"), {"otp": otp_record.otp})
-        self.assertContains(resp_blocked, "Maximum verification attempts exceeded")
-        self.assertFalse(User.objects.filter(username="attemptuser").exists())
-
-    def test_resend_otp_resets_attempts_and_generates_new_code(self):
-        self.client.post(
-            reverse("store:register"),
-            {
-                "username": "resenduser",
-                "email": "resend@example.com",
-                "first_name": "Resend",
-                "last_name": "User",
-                "password1": "Secure-pass-12345",
-                "password2": "Secure-pass-12345",
-            },
-        )
-        old_record = EmailOTP.objects.get(email="resend@example.com")
-        old_record.attempts = 3
-        old_record.save()
-
-        # Resend OTP
-        resend_resp = self.client.post(reverse("store:resend_otp"))
-        self.assertRedirects(resend_resp, reverse("store:verify_otp"))
-
-        new_record = EmailOTP.objects.get(email="resend@example.com")
-        self.assertEqual(new_record.attempts, 0)
-        self.assertFalse(new_record.is_expired())
-
-        # Can now verify with new OTP
-        verify_resp = self.client.post(
-            reverse("store:verify_otp"),
-            {"otp": new_record.otp},
-        )
-        self.assertRedirects(verify_resp, reverse("store:home"))
-        self.assertTrue(User.objects.filter(username="resenduser").exists())
-
-    def test_expired_otp_is_rejected(self):
-        from datetime import timedelta
-        from django.utils import timezone
-
-        self.client.post(
-            reverse("store:register"),
-            {
-                "username": "expireuser",
-                "email": "expire@example.com",
-                "first_name": "Expire",
-                "last_name": "User",
-                "password1": "Secure-pass-12345",
-                "password2": "Secure-pass-12345",
-            },
-        )
-        record = EmailOTP.objects.get(email="expire@example.com")
-        record.created_at = timezone.now() - timedelta(minutes=10)
-        record.save()
-
-        resp = self.client.post(reverse("store:verify_otp"), {"otp": record.otp})
-        self.assertContains(resp, "expired")
-        self.assertFalse(User.objects.filter(username="expireuser").exists())
-
-    def test_verify_and_resend_without_session_redirects_to_register(self):
-        # Direct GET /verify-otp/ without session
-        resp = self.client.get(reverse("store:verify_otp"))
-        self.assertRedirects(resp, reverse("store:register"))
-
-        # Direct POST /resend-otp/ without session
-        resp2 = self.client.post(reverse("store:resend_otp"))
-        self.assertRedirects(resp2, reverse("store:register"))
-
-    def test_authenticated_user_redirected_from_otp_views(self):
-        user = User.objects.create_user(username="authuser", password="password")
-        self.client.force_login(user)
-
-        self.assertRedirects(self.client.get(reverse("store:register")), reverse("store:home"))
-        self.assertRedirects(self.client.get(reverse("store:verify_otp")), reverse("store:home"))
-        self.assertRedirects(self.client.post(reverse("store:resend_otp")), reverse("store:home"))
-

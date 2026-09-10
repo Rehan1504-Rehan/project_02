@@ -18,13 +18,8 @@ from django.utils.cache import get_conditional_response
 from django.utils.http import http_date, url_has_allowed_host_and_scheme
 
 from .forms import CheckoutForm, LoginForm, ProfileForm, RegistrationForm
-from .models import Cart, CartItem, Category, EmailOTP, MediaFile, Order, OrderItem, Product
-from .otp_views import register_view_with_otp, resend_otp_view, verify_otp_view
+from .models import Cart, CartItem, Category, MediaFile, Order, OrderItem, Product
 from .storage import normalize_name
-
-
-register_view = register_view_with_otp
-
 
 
 class OutOfStockError(Exception):
@@ -254,6 +249,18 @@ def product_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "store/product_detail.html",
         {"product": product, "related_products": related_products},
     )
+
+
+@require_http_methods(["GET", "POST"])
+def register_view(request: HttpRequest) -> HttpResponse:
+    if request.user.is_authenticated:
+        return redirect("store:home")
+    form = RegistrationForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Your account was created. You can now sign in.")
+        return redirect("store:login")
+    return render(request, "store/register.html", {"form": form})
 
 
 @require_http_methods(["GET", "POST"])
