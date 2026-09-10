@@ -159,29 +159,6 @@ MAX_IMAGE_UPLOAD_BYTES = int(MAX_IMAGE_UPLOAD_MB * 1024 * 1024)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Email Configuration (Brevo SMTP - 300 free emails/day forever)
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp-relay.brevo.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
-EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "") or os.getenv("BREVO_API_KEY", "")
-DEFAULT_FROM_EMAIL = os.getenv(
-    "DEFAULT_FROM_EMAIL",
-    f"Northstar Store <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "Northstar Store <noreply@example.com>",
-)
-EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
-BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
-OTP_EXPIRY_MINUTES = int(os.getenv("OTP_EXPIRY_MINUTES", "5"))
-
-if "EMAIL_BACKEND" in os.environ:
-    EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
-elif EMAIL_HOST_USER:
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-else:
-    # Local development fallback when Brevo credentials are not provided
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-
 # Apply pending migrations when the web server boots, so a deployment whose
 # build step does not run `manage.py migrate` still works. See
 # ecommerce/startup.py. Set False if migrations are handled by the platform.
